@@ -858,8 +858,8 @@ with gr.Blocks(
     )
 iface = gr.Interface(
     fn=predict,
-    inputs=gr.Image(shape=(224, 224)),
-    outputs=gr.Label(num_top_classes=3),
+    inputs=gr.Image(shape=(500, 500)),
+    outputs=gr.Label(num_top_classes=2),
     title="Breast Cancer Histopathology Classifier"
 )
 iface.launch()
