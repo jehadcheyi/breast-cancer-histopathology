@@ -6,7 +6,6 @@ from PIL import Image
 import tensorflow as tf
 from tensorflow.keras.models import load_model, Model
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
-from google.colab import drive
 import gradio as gr
 
 # Load Models
