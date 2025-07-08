@@ -856,7 +856,10 @@ with gr.Blocks(
         inputs=image_input,
         outputs=[diagnosis_output, plot_output]
     )
-iface = gr.Interface(fn=predict, inputs=..., outputs=..., title="Your Title")
+iface = gr.Interface(
+    fn=predict,
+    inputs=gr.Image(shape=(224, 224)),
+    outputs=gr.Label(num_top_classes=3),
+    title="Breast Cancer Histopathology Classifier"
+)
 iface.launch()
-# Launch the interface
-demo.launch
