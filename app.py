@@ -856,6 +856,7 @@ with gr.Blocks(
         inputs=image_input,
         outputs=[diagnosis_output, plot_output]
     )
-
+iface = gr.Interface(fn=predict_function, inputs=..., outputs=..., title="Your Title")
+iface.launch()
 # Launch the interface
 demo.launch
