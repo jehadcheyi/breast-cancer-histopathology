@@ -123,5 +123,4 @@ with gr.Blocks(title="Breast Cancer Analysis") as demo:
         inputs=image_input,
         outputs=[results_html, plot_output]
     )
-
-demo.launch()
+demo.launch(share=True)  # Creates a public URL
