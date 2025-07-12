@@ -181,7 +181,7 @@ def analyze_image(input_img):
 
 
 
-# Automatically find all images in the example folder
+# Get all images from example folder
 example_dir = os.path.join(os.path.dirname(__file__), 'example')
 example_images = []
 valid_extensions = ('.png', '.jpg', '.jpeg', '.tiff', '.bmp')
@@ -191,8 +191,6 @@ if os.path.exists(example_dir):
         if filename.lower().endswith(valid_extensions):
             img_path = os.path.join(example_dir, filename)
             example_images.append((img_path, os.path.splitext(filename)[0]))
-else:
-    print(f"Warning: Example directory not found at {example_dir}")
 
 # Custom CSS for gallery
 custom_css = """
@@ -207,9 +205,6 @@ custom_css = """
     transition: all 0.3s ease;
     text-align: center;
 }
-.gallery-item:hover {
-    transform: scale(1.05);
-}
 .gallery-img {
     width: 100%;
     height: 120px;
@@ -219,61 +214,87 @@ custom_css = """
 }
 .gallery-img:hover {
     border-color: #4a6fa5;
+    transform: scale(1.05);
 }
 .gallery-label {
     margin-top: 5px;
     font-size: 12px;
     color: #7f8c8d;
-    word-break: break-word;
 }
 """
 
+def load_example_image(img_path):
+    """Load image from path and return numpy array"""
+    img = Image.open(img_path)
+    return np.array(img)
+
 with gr.Blocks(css=custom_css) as demo:
-    gr.Markdown("# Breast Cancer Histopathology Analysis")
-    
     with gr.Row():
         with gr.Column(scale=1):
-            # Upload section
+            # Main image input
             image_input = gr.Image(label="Upload Image", type="numpy")
             submit_btn = gr.Button("Analyze", variant="primary")
             
-            # Dynamic gallery of example images
+            # Example gallery
             if example_images:
                 with gr.Accordion("Example Gallery", open=True):
                     gr.Markdown("Click any image to load it:")
-                    with gr.Row():
-                        gallery_html = "<div class='gallery'>"
-                        for img_path, label in example_images:
-                            gallery_html += f"""
-                            <div class='gallery-item' onclick="document.getElementById('hidden-img-{label.replace(' ', '-')}').click()">
-                                <img src='file={img_path}' class='gallery-img' alt='{label}'>
-                                <div class='gallery-label'>{label}</div>
-                            </div>
-                            """
-                        gallery_html += "</div>"
-                        gallery = gr.HTML(gallery_html)
-                        
-                        # Create hidden image components for each example
-                        for img_path, label in example_images:
-                            hidden_img = gr.Image(
-                                value=img_path,
-                                visible=False,
-                                elem_id=f"hidden-img-{label.replace(' ', '-')}"
-                            )
-                            hidden_img.change(
-                                lambda x: x,
-                                inputs=[hidden_img],
-                                outputs=[image_input]
-                            )
+                    
+                    gallery_html = "<div class='gallery'>"
+                    for img_path, label in example_images:
+                        gallery_html += f"""
+                        <div class='gallery-item' onclick='window.loadExample("{img_path}")'>
+                            <img src='file={img_path}' class='gallery-img' alt='{label}'>
+                            <div class='gallery-label'>{label}</div>
+                        </div>
+                        """
+                    gallery_html += "</div>"
+                    
+                    gallery = gr.HTML(gallery_html)
+                    
+                    # JavaScript to handle image loading
+                    gallery.load(None, None, None, _js="""
+                    window.loadExample = function(imgPath) {
+                        const url = '/file=' + imgPath;
+                        fetch(url)
+                            .then(response => response.blob())
+                            .then(blob => {
+                                const reader = new FileReader();
+                                reader.onload = function() {
+                                    const img = document.querySelector('#image-input img');
+                                    if (img) {
+                                        img.src = reader.result;
+                                        img.dispatchEvent(new Event('change'));
+                                    }
+                                };
+                                reader.readAsDataURL(blob);
+                            });
+                    }
+                    """)
             
         with gr.Column(scale=2):
             diagnosis_output = gr.HTML()
             plot_output = gr.Plot()
     
-    submit_btn.click(
-        fn=analyze_image,
-        inputs=[image_input],
-        outputs=[diagnosis_output, plot_output]
+    # Handle example image clicks
+    def load_image(img_path):
+        img = load_example_image(img_path)
+        return img
+    
+    demo.load(
+        None,
+        None,
+        None,
+        _js="""
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.gallery-item')) {
+                const item = e.target.closest('.gallery-item');
+                const img = item.querySelector('img');
+                const src = img.src.replace('file=', '');
+                window.loadExample(src);
+            }
+        });
+        """
     )
 
 demo.launch()
