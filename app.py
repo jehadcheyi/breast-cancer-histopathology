@@ -232,7 +232,7 @@ with gr.Blocks(css=custom_css) as demo:
     with gr.Row():
         with gr.Column(scale=1):
             # Main image input
-            image_input = gr.Image(label="Upload Image", type="numpy")
+            image_input = gr.Image(label="Upload Image", type="numpy", elem_id="main-image-input")
             submit_btn = gr.Button("Analyze", variant="primary")
             
             # Example gallery
@@ -251,49 +251,31 @@ with gr.Blocks(css=custom_css) as demo:
                     gallery_html += "</div>"
                     
                     gallery = gr.HTML(gallery_html)
-                    
-                    # JavaScript to handle image loading
-                    gallery.load(None, None, None, _js="""
-                    window.loadExample = function(imgPath) {
-                        const url = '/file=' + imgPath;
-                        fetch(url)
-                            .then(response => response.blob())
-                            .then(blob => {
-                                const reader = new FileReader();
-                                reader.onload = function() {
-                                    const img = document.querySelector('#image-input img');
-                                    if (img) {
-                                        img.src = reader.result;
-                                        img.dispatchEvent(new Event('change'));
-                                    }
-                                };
-                                reader.readAsDataURL(blob);
-                            });
-                    }
-                    """)
             
         with gr.Column(scale=2):
             diagnosis_output = gr.HTML()
             plot_output = gr.Plot()
     
-    # Handle example image clicks
-    def load_image(img_path):
-        img = load_example_image(img_path)
-        return img
-    
+    # JavaScript to handle image loading
     demo.load(
         None,
         None,
         None,
-        _js="""
-        document.addEventListener('click', function(e) {
-            if (e.target.closest('.gallery-item')) {
-                const item = e.target.closest('.gallery-item');
-                const img = item.querySelector('img');
-                const src = img.src.replace('file=', '');
-                window.loadExample(src);
-            }
-        });
+        _js=f"""
+        window.loadExample = function(imgPath) {{
+            const input = document.querySelector('#main-image-input input[type="file"]');
+            if (input) {{
+                // Create a fake file input event
+                const file = new File([""], imgPath, {{ type: 'image/png' }});
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                input.files = dataTransfer.files;
+                
+                // Trigger change event
+                const event = new Event('change');
+                input.dispatchEvent(event);
+            }}
+        }}
         """
     )
 
