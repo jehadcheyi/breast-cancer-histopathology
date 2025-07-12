@@ -180,7 +180,6 @@ def analyze_image(input_img):
 
 
 
-
 # Get all images from example folder
 example_dir = os.path.join(os.path.dirname(__file__), 'example')
 example_images = []
@@ -229,54 +228,67 @@ def load_example_image(img_path):
     return np.array(img)
 
 with gr.Blocks(css=custom_css) as demo:
-    with gr.Row():
-        with gr.Column(scale=1):
-            # Main image input
-            image_input = gr.Image(label="Upload Image", type="numpy", elem_id="main-image-input")
-            submit_btn = gr.Button("Analyze", variant="primary")
-            
-            # Example gallery
-            if example_images:
-                with gr.Accordion("Example Gallery", open=True):
-                    gr.Markdown("Click any image to load it:")
-                    
-                    gallery_html = "<div class='gallery'>"
-                    for img_path, label in example_images:
-                        gallery_html += f"""
-                        <div class='gallery-item' onclick='window.loadExample("{img_path}")'>
-                            <img src='file={img_path}' class='gallery-img' alt='{label}'>
-                            <div class='gallery-label'>{label}</div>
-                        </div>
-                        """
-                    gallery_html += "</div>"
-                    
-                    gallery = gr.HTML(gallery_html)
-            
-        with gr.Column(scale=2):
-            diagnosis_output = gr.HTML()
-            plot_output = gr.Plot()
+    # Main image input
+    image_input = gr.Image(label="Upload Image", type="numpy", elem_id="main-image-input")
+    submit_btn = gr.Button("Analyze", variant="primary")
     
-    # JavaScript to handle image loading
-    demo.load(
-        None,
-        None,
-        None,
-        _js=f"""
-        window.loadExample = function(imgPath) {{
-            const input = document.querySelector('#main-image-input input[type="file"]');
-            if (input) {{
-                // Create a fake file input event
-                const file = new File([""], imgPath, {{ type: 'image/png' }});
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(file);
-                input.files = dataTransfer.files;
-                
-                // Trigger change event
-                const event = new Event('change');
-                input.dispatchEvent(event);
-            }}
-        }}
-        """
+    # Example gallery
+    if example_images:
+        with gr.Accordion("Example Gallery", open=True):
+            gr.Markdown("Click any image to load it:")
+            
+            gallery_html = "<div class='gallery'>"
+            for img_path, label in example_images:
+                gallery_html += f"""
+                <div class='gallery-item' id='gallery-item-{os.path.basename(img_path)}'>
+                    <img src='file={img_path}' class='gallery-img' alt='{label}'>
+                    <div class='gallery-label'>{label}</div>
+                </div>
+                """
+            gallery_html += "</div>"
+            
+            gallery = gr.HTML(gallery_html)
+            
+            # Create hidden components for each example image
+            hidden_images = []
+            for img_path, label in example_images:
+                with gr.Column(visible=False):
+                    hidden_img = gr.Image(value=img_path, visible=False)
+                    hidden_images.append(hidden_img)
+    
+    # Results section
+    with gr.Row():
+        diagnosis_output = gr.HTML()
+        plot_output = gr.Plot()
+    
+    # Set up click events for gallery items
+    if example_images:
+        for i, (img_path, label) in enumerate(example_images):
+            hidden_images[i].change(
+                lambda x: x,
+                inputs=[hidden_images[i]],
+                outputs=[image_input],
+                show_progress=False
+            )
+            
+            demo.load(
+                None,
+                None,
+                None,
+                _js=f"""
+                document.getElementById('gallery-item-{os.path.basename(img_path)}').onclick = function() {{
+                    document.querySelectorAll('#main-image-input input[type="file"]')[0].dispatchEvent(new Event('click'));
+                    setTimeout(function() {{
+                        document.getElementById('{hidden_images[i].elem_id}').dispatchEvent(new Event('change'));
+                    }}, 100);
+                }};
+                """
+            )
+    
+    submit_btn.click(
+        fn=analyze_image,  # Your existing analyze function
+        inputs=[image_input],
+        outputs=[diagnosis_output, plot_output]
     )
 
 demo.launch()
