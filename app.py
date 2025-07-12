@@ -666,7 +666,10 @@ td {
 }
 """
 
-# Example images (assuming they're in an 'examples' folder)
+
+# ... [previous imports and model loading code remains the same until the UI section] ...
+
+# Example images (in 'example' folder)
 example_images = [
     ("example/SOB_B_A-14-22549AB-40-001.png", "Adenosis (Benign)"),
     ("example/SOB_B_F-14-9133-100-001.png", "Fibroadenoma (Benign)"),
@@ -676,7 +679,7 @@ example_images = [
     ("example/SOB_M_PC-14-15704-100-002.png", "Papillary Carcinoma (Malignant)")
 ]
 
-# Gradio UI with modern design and color scheme
+# Gradio UI
 with gr.Blocks(
     title="Breast Cancer Histopathology Analysis", 
     css=custom_css, 
@@ -688,7 +691,7 @@ with gr.Blocks(
         text_size="md",
     )
 ) as demo:
-    # Header with logo and title
+    # Header
     with gr.Row():
         with gr.Column(scale=1):
             gr.HTML("""
@@ -722,52 +725,51 @@ with gr.Blocks(
                     elem_classes="primary-button"
                 )
             
-            # Example images section
-# In the example images section, replace the example image creation with this:
-
-# In the example images section, replace with this:
-
-with gr.Accordion("📁 Example Images", open=True):
-    gr.Markdown("""
-    <div style="color: var(--secondary-text); margin-bottom: 10px;">
-        Click on any example image below to load it for analysis:
-    </div>
-    """)
-    
-    with gr.Row():
-        for img_path, label in example_images:
-            if os.path.exists(img_path):
-                with gr.Column(scale=1, min_width=100):
-                    # Create a button with custom HTML for the image
-                    example_btn = gr.Button(
-                        elem_classes="example-btn",
-                        interactive=True
-                    )
-                    # Set the background image using JavaScript
-                    example_btn.click(
-                        None,
-                        None,
-                        None,
-                        _js=f"""
-                        () => {{
-                            document.querySelector('#{example_btn.elem_id}').style.backgroundImage = "url('{img_path}')";
-                            return [];
-                        }}
-                        """
-                    )
-                    # Add click event to load the image
-                    example_btn.click(
-                        lambda x: x,
-                        inputs=[gr.Image(value=img_path, visible=False)],
-                        outputs=[image_input],
-                        show_progress=False
-                    )
-                    # Add the label below
-                    gr.Markdown(f"""
-                    <div class="example-label">{label}</div>
-                    """)
-            else:
-                print(f"Warning: Example image not found at {img_path}")
+            # Example images section - FIXED IMPLEMENTATION
+            with gr.Accordion("📁 Example Images", open=True):
+                gr.Markdown("""
+                <div style="color: var(--secondary-text); margin-bottom: 10px;">
+                    Click on any example image below to load it for analysis:
+                </div>
+                """)
+                
+                # Create a row for the example gallery
+                with gr.Row():
+                    for img_path, label in example_images:
+                        if os.path.exists(img_path):
+                            # Create a column for each example
+                            with gr.Column(scale=1, min_width=100):
+                                # Create an invisible image component
+                                hidden_image = gr.Image(
+                                    value=img_path, 
+                                    visible=False
+                                )
+                                # Create a button that will trigger the image load
+                                example_btn = gr.Button(
+                                    label=label,
+                                    elem_classes="example-btn"
+                                )
+                                # Set the click action
+                                example_btn.click(
+                                    lambda x: x,
+                                    inputs=[hidden_image],
+                                    outputs=[image_input],
+                                    show_progress=False
+                                )
+                                # Add JavaScript to style the button as an image
+                                example_btn.click(
+                                    None,
+                                    None,
+                                    None,
+                                    _js=f"""
+                                    () => {{
+                                        document.querySelector('#{example_btn.elem_id}').style.backgroundImage = "url('{img_path}')";
+                                        return [];
+                                    }}
+                                    """
+                                )
+                        else:
+                            print(f"Warning: Example image not found at {img_path}")
             
             # Options section
             with gr.Accordion("⚙️ Analysis Options", open=False):
@@ -798,40 +800,10 @@ with gr.Accordion("📁 Example Images", open=True):
                         <li><strong>Subtype Classification</strong>: Identifies specific tissue subtypes</li>
                         <li><strong>Attention Visualization</strong>: Shows which image regions influenced the decision</li>
                     </ol>
-                    
-                    <h3 style="color: var(--primary-text); margin-top: 20px;">Interpretation Guide</h3>
-                    <ul style="color: var(--primary-text);">
-                        <li><strong>Heatmaps</strong>: Red areas indicate regions most important for the diagnosis</li>
-                        <li><strong>Confidence Scores</strong>: Higher values (70%+) indicate more reliable predictions</li>
-                        <li><strong>Subtype Analysis</strong>: Shows probabilities for all possible subtypes</li>
-                    </ul>
-                    
-                    <h3 style="color: var(--primary-text); margin-top: 20px;">Important Notes</h3>
-                    <ul style="color: var(--primary-text);">
-                        <li>This tool is for <strong>research and educational purposes only</strong></li>
-                        <li>Always consult a qualified pathologist for clinical diagnosis</li>
-                        <li>Results should not be used as sole basis for medical decisions</li>
-                    </ul>
                 </div>
                 """)
-            
-            # Instructions
-            gr.Markdown(f"""
-            <div class="card">
-                <h3 style="color: var(--primary-text); margin-top: 0;">📝 Instructions</h3>
-                <ol style="color: var(--primary-text); padding-left: 20px;">
-                    <li>Upload a high-quality histopathology image</li>
-                    <li>Click "Analyze Image" to process</li>
-                    <li>Review the diagnosis and visualization</li>
-                    <li>Consult the detailed subtype analysis</li>
-                    <li>Share results with your healthcare provider</li>
-                </ol>
-                <p style="font-size: 13px; color: var(--secondary-text); margin-bottom: 0;">
-                <strong>Note:</strong> For best results, use images at 40x-400x magnification with clear tissue structures.
-                </p>
-            </div>
-            """)
-        
+
+        # Right column (results)
         with gr.Column(scale=2):
             # Results tabs
             with gr.Tabs():
@@ -852,25 +824,10 @@ with gr.Accordion("📁 Example Images", open=True):
                 gr.Markdown("""
                 <div class="card">
                     <h3 style="color: var(--primary-text); margin-top: 0;">Understanding Your Results</h3>
-                    <p style="color: var(--primary-text);">After analysis, this section will provide detailed information about:</p>
-                    <ul style="color: var(--primary-text);">
-                        <li>The specific characteristics of your tissue sample</li>
-                        <li>What the diagnosis means clinically</li>
-                        <li>Recommended next steps based on the findings</li>
-                        <li>Additional resources for more information</li>
-                    </ul>
+                    <p style="color: var(--primary-text);">After analysis, this section will provide detailed information about the diagnosis.</p>
                 </div>
                 """)
-            
-            # Footer
-            gr.Markdown("""
-            <div class="footer">
-                <p style="color: var(--secondary-text);">This AI tool was developed for research purposes using deep learning models trained on histopathology images.</p>
-                <p style="color: var(--secondary-text);">For clinical concerns, please consult with a qualified medical professional.</p>
-                <p style="font-size: 0.8rem; color: var(--secondary-text);">v2.1.0 | Last updated: July 2023</p>
-            </div>
-            """)
-    
+
     # Event handling
     submit_btn.click(
         fn=analyze_image,
