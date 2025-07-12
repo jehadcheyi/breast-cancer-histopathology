@@ -633,6 +633,34 @@ td {
     gap: 15px;
     margin-top: 15px;
 }
+
+.example-btn {
+    padding: 0 !important;
+    height: 100px !important;
+    width: 100px !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    border: 2px solid transparent !important;
+    transition: all 0.3s ease !important;
+    margin: 0 auto !important;
+    display: block !important;
+}
+
+.example-btn:hover {
+    transform: scale(1.05);
+    border-color: var(--diagnosis-text) !important;
+}
+
+.example-label {
+    font-size: 12px;
+    text-align: center;
+    margin-top: 5px;
+    color: var(--secondary-text);
+    width: 100px;
+    margin: 5px auto 0;
+    word-break: break-word;
+}
 .example-image {
     border-radius: 8px;
     cursor: pointer;
@@ -649,21 +677,7 @@ td {
     margin-top: 5px;
     color: var(--secondary-text);
 }
-.example-btn {
-    padding: 0 !important;
-    height: 100px !important;
-    width: 100px !important;
-    background-size: cover !important;
-    background-position: center !important;
-    background-repeat: no-repeat !important;
-    border: 2px solid transparent !important;
-    transition: all 0.3s ease !important;
-}
 
-.example-btn:hover {
-    transform: scale(1.05);
-    border-color: var(--diagnosis-text) !important;
-}
 """
 
 
@@ -725,51 +739,57 @@ with gr.Blocks(
                     elem_classes="primary-button"
                 )
             
-            # Example images section - FIXED IMPLEMENTATION
-            with gr.Accordion("📁 Example Images", open=True):
-                gr.Markdown("""
-                <div style="color: var(--secondary-text); margin-bottom: 10px;">
-                    Click on any example image below to load it for analysis:
-                </div>
-                """)
-                
-                # Create a row for the example gallery
-                with gr.Row():
-                    for img_path, label in example_images:
-                        if os.path.exists(img_path):
-                            # Create a column for each example
-                            with gr.Column(scale=1, min_width=100):
-                                # Create an invisible image component
-                                hidden_image = gr.Image(
-                                    value=img_path, 
-                                    visible=False
-                                )
-                                # Create a button that will trigger the image load
-                                example_btn = gr.Button(
-                                    label=label,
-                                    elem_classes="example-btn"
-                                )
-                                # Set the click action
-                                example_btn.click(
-                                    lambda x: x,
-                                    inputs=[hidden_image],
-                                    outputs=[image_input],
-                                    show_progress=False
-                                )
-                                # Add JavaScript to style the button as an image
-                                example_btn.click(
-                                    None,
-                                    None,
-                                    None,
-                                    _js=f"""
-                                    () => {{
-                                        document.querySelector('#{example_btn.elem_id}').style.backgroundImage = "url('{img_path}')";
-                                        return [];
-                                    }}
-                                    """
-                                )
-                        else:
-                            print(f"Warning: Example image not found at {img_path}")
+            # In the example images section, replace with this:
+
+with gr.Accordion("📁 Example Images", open=True):
+    gr.Markdown("""
+    <div style="color: var(--secondary-text); margin-bottom: 10px;">
+        Click on any example image below to load it for analysis:
+    </div>
+    """)
+    
+    # Create a row for the example gallery
+    with gr.Row():
+        for img_path, label in example_images:
+            if os.path.exists(img_path):
+                with gr.Column(scale=1, min_width=100):
+                    # Create a button with the image path as its value
+                    example_btn = gr.Button(
+                        value=label,  # Using value instead of label
+                        elem_classes="example-btn"
+                    )
+                    # Create a hidden image component
+                    hidden_img = gr.Image(
+                        value=img_path,
+                        visible=False
+                    )
+                    # Set the click action
+                    example_btn.click(
+                        lambda x: x,
+                        inputs=[hidden_img],
+                        outputs=[image_input],
+                        show_progress=False
+                    )
+                    # Add JavaScript to style the button as an image
+                    example_btn.click(
+                        None,
+                        None,
+                        None,
+                        _js=f"""
+                        () => {{
+                            const btn = document.querySelector('#{example_btn.elem_id}');
+                            btn.style.backgroundImage = "url('{img_path}')";
+                            btn.style.color = "transparent";
+                            return [];
+                        }}
+                        """
+                    )
+                    # Add the label below
+                    gr.Markdown(f"""
+                    <div class="example-label">{label}</div>
+                    """)
+            else:
+                print(f"Warning: Example image not found at {img_path}")
             
             # Options section
             with gr.Accordion("⚙️ Analysis Options", open=False):
