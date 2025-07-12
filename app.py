@@ -418,27 +418,6 @@ def analyze_image(input_img):
         </div>
         """
         return error_html, None
-        # Prepare metrics content
-        metrics_content = f"""
-        <div class="card">
-            <h3 style="color: var(--primary-text);">Subtype Confidence Metrics</h3>
-            {subtype_table}
-            <div style="margin-top: 20px;">
-                <h4 style="color: var(--primary-text);">Confidence Interpretation</h4>
-                <ul style="color: var(--primary-text);">
-                    <li><span style="color: #4CAF50; font-weight: bold;">High Confidence</span>: >70%</li>
-                    <li><span style="color: #FFC107; font-weight: bold;">Medium Confidence</span>: 50-70%</li>
-                    <li><span style="color: #F44336; font-weight: bold;">Low Confidence</span>: <50%</li>
-                </ul>
-            </div>
-        </div>
-        """
-        
-        return diagnosis_html + explanation, fig, metrics_content
-
-    except Exception as e:
-        error_html = f"""..."""  # Keep your existing error HTML
-        return error_html, None, "<div style='color: var(--danger-text);'>Error generating metrics</div>"
 
 # Custom CSS with enhanced color scheme
 custom_css = """
@@ -455,62 +434,49 @@ custom_css = """
     --card-bg: #ffffff;             /* White for cards */
     --shadow-color: rgba(0,0,0,0.1); /* Shadow color */
 }
-
 .gradio-container {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     line-height: 1.6;
     color: var(--primary-text);
 }
-
 .dark .gradio-container {
     color: var(--light-text);
 }
-
 /* Headings */
 h1, h2, h3, h4 {
     color: var(--primary-text);
     font-weight: 600;
 }
-
 .dark h1, .dark h2, .dark h3, .dark h4 {
     color: var(--light-text);
 }
-
 /* Text elements */
 p, li {
     color: var(--primary-text);
 }
-
 .dark p, .dark li {
     color: var(--light-text);
 }
-
 /* Secondary text */
 .secondary-text {
     color: var(--secondary-text);
 }
-
 /* Diagnosis specific colors */
 .diagnosis-text {
     color: var(--diagnosis-text);
 }
-
 .warning-text {
     color: var(--warning-text);
 }
-
 .success-text {
     color: var(--success-text);
 }
-
 .danger-text {
     color: var(--danger-text);
 }
-
 .link-text {
     color: var(--link-color);
 }
-
 /* Cards and containers */
 .card {
     background-color: var(--card-bg);
@@ -520,12 +486,10 @@ p, li {
     box-shadow: 0 2px 4px var(--shadow-color);
     border: 1px solid var(--border-color);
 }
-
 .dark .card {
     background-color: #2d3748;
     border-color: #4a5568;
 }
-
 /* Upload box */
 .upload-box {
     border: 2px dashed var(--diagnosis-text) !important;
@@ -534,20 +498,16 @@ p, li {
     background-color: rgba(74, 111, 165, 0.05) !important;
     transition: all 0.3s ease !important;
 }
-
 .dark .upload-box {
     background-color: rgba(160, 196, 255, 0.05) !important;
     border-color: #a0c4ff !important;
 }
-
 .upload-box:hover {
     background-color: rgba(74, 111, 165, 0.1) !important;
 }
-
 .dark .upload-box:hover {
     background-color: rgba(160, 196, 255, 0.1) !important;
 }
-
 /* Buttons */
 .primary-button {
     background-color: var(--diagnosis-text) !important;
@@ -561,21 +521,17 @@ p, li {
     text-transform: uppercase !important;
     letter-spacing: 0.5px !important;
 }
-
 .primary-button:hover {
     background-color: #3a5a80 !important;
     transform: translateY(-2px) !important;
     box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15) !important;
 }
-
 .dark .primary-button {
     background-color: #5a86c2 !important;
 }
-
 .dark .primary-button:hover {
     background-color: #4a76b2 !important;
 }
-
 /* Tabs */
 .tab-button {
     border-radius: 8px !important;
@@ -583,16 +539,13 @@ p, li {
     transition: all 0.3s ease !important;
     color: var(--primary-text) !important;
 }
-
 .tab-button.selected {
     background-color: var(--diagnosis-text) !important;
     color: white !important;
 }
-
 .dark .tab-button.selected {
     background-color: #5a86c2 !important;
 }
-
 /* Footer */
 .footer {
     font-size: 0.85rem;
@@ -602,72 +555,58 @@ p, li {
     padding-top: 1rem;
     border-top: 1px solid var(--border-color);
 }
-
 .dark .footer {
     color: #b0b0b0;
     border-top-color: #4a5568;
 }
-
 /* Custom scrollbar */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
-
 ::-webkit-scrollbar-track {
     background: #f1f1f1;
     border-radius: 10px;
 }
-
 .dark ::-webkit-scrollbar-track {
     background: #2d3748;
 }
-
 ::-webkit-scrollbar-thumb {
     background: var(--diagnosis-text);
     border-radius: 10px;
 }
-
 .dark ::-webkit-scrollbar-thumb {
     background: #5a86c2;
 }
-
 ::-webkit-scrollbar-thumb:hover {
     background: #3a5a80;
 }
-
 .dark ::-webkit-scrollbar-thumb:hover {
     background: #4a76b2;
 }
-
 /* Tables */
 table {
     width: 100%;
     border-collapse: collapse;
     margin: 15px 0;
 }
-
 th {
     background-color: #f2f2f2;
     padding: 10px;
     text-align: left;
     border: 1px solid #ddd;
 }
-
 .dark th {
     background-color: #4a5568;
     color: var(--light-text);
 }
-
 td {
     padding: 10px;
     border: 1px solid #ddd;
 }
-
 .dark td {
     border-color: #4a5568;
 }
-
 /* Accordions */
 .accordion {
     background-color: var(--card-bg) !important;
@@ -676,24 +615,56 @@ td {
     margin-bottom: 1.5rem !important;
     border: 1px solid var(--border-color) !important;
 }
-
 .dark .accordion {
     background-color: #2d3748 !important;
     border-color: #4a5568 !important;
 }
-
 /* Checkbox group */
 .checkbox-group {
     padding: 1rem !important;
 }
-
 /* Plot container */
 .plot-container {
     border-radius: 8px !important;
     overflow: hidden !important;
     box-shadow: 0 2px 4px var(--shadow-color) !important;
 }
+/* Example gallery */
+.example-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+.example-image {
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+    border: 2px solid transparent;
+}
+.example-image:hover {
+    transform: scale(1.05);
+    border-color: var(--diagnosis-text);
+}
+.example-label {
+    font-size: 12px;
+    text-align: center;
+    margin-top: 5px;
+    color: var(--secondary-text);
+}
 """
+
+# Example images (assuming they're in an 'examples' folder)
+example_images = [
+    ("examples/adenosis.jpg", "Adenosis (Benign)"),
+    ("examples/fibroadenoma.jpg", "Fibroadenoma (Benign)"),
+    ("examples/phyllodes.jpg", "Phyllodes Tumor (Benign)"),
+    ("examples/tubular_adenoma.jpg", "Tubular Adenoma (Benign)"),
+    ("examples/ductal_carcinoma.jpg", "Ductal Carcinoma (Malignant)"),
+    ("examples/lobular_carcinoma.jpg", "Lobular Carcinoma (Malignant)"),
+    ("examples/mucinous_carcinoma.jpg", "Mucinous Carcinoma (Malignant)"),
+    ("examples/papillary_carcinoma.jpg", "Papillary Carcinoma (Malignant)")
+]
 
 # Gradio UI with modern design and color scheme
 with gr.Blocks(
@@ -740,6 +711,40 @@ with gr.Blocks(
                     variant="primary", 
                     elem_classes="primary-button"
                 )
+            
+            # Example images section
+            with gr.Accordion("📁 Example Images", open=True):
+                gr.Markdown("""
+                <div style="color: var(--secondary-text); margin-bottom: 10px;">
+                    Click on any example image below to load it for analysis:
+                </div>
+                """)
+                
+                with gr.Row():
+                    for img_path, label in example_images:
+                        if os.path.exists(img_path):
+                            with gr.Column(scale=1, min_width=100):
+                                example = gr.Image(
+                                    value=img_path,
+                                    visible=True,
+                                    label=label,
+                                    height=100,
+                                    width=100,
+                                    show_label=False,
+                                    interactive=False,
+                                    elem_id=f"example_{label.split(' ')[0]}"
+                                )
+                                gr.Markdown(f"""
+                                <div class="example-label">{label}</div>
+                                """)
+                                example.click(
+                                    lambda x: x,
+                                    inputs=[example],
+                                    outputs=[image_input],
+                                    show_progress=False
+                                )
+                        else:
+                            print(f"Warning: Example image not found at {img_path}")
             
             # Options section
             with gr.Accordion("⚙️ Analysis Options", open=False):
@@ -818,13 +823,6 @@ with gr.Blocks(
                         label="Model Attention Analysis",
                         visible=True
                     )
-                
-                with gr.TabItem("📊 Confidence Metrics", id="metrics"):
-                    gr.Markdown("""
-                    <div style="text-align: center; padding: 40px; color: var(--secondary-text);">
-                        Confidence metrics and detailed probabilities will appear here after analysis.
-                    </div>
-                    """)
             
             # Detailed explanation
             with gr.Accordion("📚 Detailed Explanation", open=True):
