@@ -656,10 +656,8 @@ example_images = [
     ("example/SOB_B_A-14-22549AB-40-001.png", "Adenosis (Benign)"),
     ("example/SOB_B_F-14-9133-100-001.png", "Fibroadenoma (Benign)"),
     ("example/SOB_B_PT-14-21998AB-40-001.png", "Phyllodes Tumor (Benign)"),
-
     ("example/SOB_M_DC-14-2523-40-010.png", "Ductal Carcinoma (Malignant)"),
     ("example/SOB_M_LC-14-12204-40-001.png", "Lobular Carcinoma (Malignant)"),
-
     ("example/SOB_M_PC-14-15704-100-002.png", "Papillary Carcinoma (Malignant)")
 ]
 
