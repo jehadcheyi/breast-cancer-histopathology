@@ -177,35 +177,54 @@ def analyze_image(input_img):
         error_html = f"<div style='color: red;'>Error: {str(e)}</div>"
         return error_html, None
 
-example_dir = os.path.join(os.path.dirname(__file__), 'example')
-example_images = [
-    (os.path.join(example_dir, "SOB_B_A-14-22549AB-40-001.png"), "Adenosis (Benign)"),
-    (os.path.join(example_dir, "SOB_B_F-14-9133-100-001.png"), "Fibroadenoma (Benign)"),
-    (os.path.join(example_dir, "SOB_M_DC-14-2523-40-010.png"), "Ductal Carcinoma (Malignant)")
-]
 
-# Custom CSS
+
+
+
+# Automatically find all images in the example folder
+example_dir = os.path.join(os.path.dirname(__file__), 'example')
+example_images = []
+valid_extensions = ('.png', '.jpg', '.jpeg', '.tiff', '.bmp')
+
+if os.path.exists(example_dir):
+    for filename in os.listdir(example_dir):
+        if filename.lower().endswith(valid_extensions):
+            img_path = os.path.join(example_dir, filename)
+            example_images.append((img_path, os.path.splitext(filename)[0]))
+else:
+    print(f"Warning: Example directory not found at {example_dir}")
+
+# Custom CSS for gallery
 custom_css = """
-.example-btn {
-    height: 100px;
-    width: 100px;
-    background-size: cover;
-    background-position: center;
-    border: 2px solid #ddd;
-    transition: all 0.3s ease;
-    margin: 0 auto;
-    display: block;
-    cursor: pointer;
+.gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 15px;
+    padding: 10px;
 }
-.example-btn:hover {
+.gallery-item {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+.gallery-item:hover {
     transform: scale(1.05);
+}
+.gallery-img {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid #e0e0e0;
+}
+.gallery-img:hover {
     border-color: #4a6fa5;
 }
-.example-label {
-    text-align: center;
+.gallery-label {
     margin-top: 5px;
-    color: #7f8c8d;
     font-size: 12px;
+    color: #7f8c8d;
+    word-break: break-word;
 }
 """
 
@@ -218,41 +237,34 @@ with gr.Blocks(css=custom_css) as demo:
             image_input = gr.Image(label="Upload Image", type="numpy")
             submit_btn = gr.Button("Analyze", variant="primary")
             
-            # Example images - WORKING IMPLEMENTATION
-            with gr.Accordion("Example Images", open=True):
-                gr.Markdown("Click an example to load it:")
-                with gr.Row():
-                    for img_path, label in example_images:
-                        if os.path.exists(img_path):
-                            with gr.Column():
-                                # Create a clickable HTML element
-                                example_html = gr.HTML(
-                                    f"""
-                                    <div style="text-align: center;">
-                                        <div class="example-btn" 
-                                             onclick="document.getElementById('input-{label.replace(' ', '-')}').click()"
-                                             style="background-image: url('file={img_path}')">
-                                        </div>
-                                        <div class="example-label">{label}</div>
-                                        <input type="file" id="input-{label.replace(' ', '-')}" 
-                                               style="display: none" onchange="document.getElementById('output-img').click()">
-                                    </div>
-                                    """
-                                )
-                                # Hidden components to handle the image loading
-                                hidden_image = gr.Image(
-                                    value=img_path, 
-                                    visible=False,
-                                    elem_id=f"output-img"
-                                )
-                                # Set the change event
-                                hidden_image.change(
-                                    lambda x: x,
-                                    inputs=[hidden_image],
-                                    outputs=[image_input]
-                                )
-                        else:
-                            print(f"Warning: Example image not found at {img_path}")
+            # Dynamic gallery of example images
+            if example_images:
+                with gr.Accordion("Example Gallery", open=True):
+                    gr.Markdown("Click any image to load it:")
+                    with gr.Row():
+                        gallery_html = "<div class='gallery'>"
+                        for img_path, label in example_images:
+                            gallery_html += f"""
+                            <div class='gallery-item' onclick="document.getElementById('hidden-img-{label.replace(' ', '-')}').click()">
+                                <img src='file={img_path}' class='gallery-img' alt='{label}'>
+                                <div class='gallery-label'>{label}</div>
+                            </div>
+                            """
+                        gallery_html += "</div>"
+                        gallery = gr.HTML(gallery_html)
+                        
+                        # Create hidden image components for each example
+                        for img_path, label in example_images:
+                            hidden_img = gr.Image(
+                                value=img_path,
+                                visible=False,
+                                elem_id=f"hidden-img-{label.replace(' ', '-')}"
+                            )
+                            hidden_img.change(
+                                lambda x: x,
+                                inputs=[hidden_img],
+                                outputs=[image_input]
+                            )
             
         with gr.Column(scale=2):
             diagnosis_output = gr.HTML()
