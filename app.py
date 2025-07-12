@@ -649,6 +649,21 @@ td {
     margin-top: 5px;
     color: var(--secondary-text);
 }
+.example-btn {
+    padding: 0 !important;
+    height: 100px !important;
+    width: 100px !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    border: 2px solid transparent !important;
+    transition: all 0.3s ease !important;
+}
+
+.example-btn:hover {
+    transform: scale(1.05);
+    border-color: var(--diagnosis-text) !important;
+}
 """
 
 # Example images (assuming they're in an 'examples' folder)
@@ -708,38 +723,35 @@ with gr.Blocks(
                 )
             
             # Example images section
-            with gr.Accordion("📁 Example Images", open=True):
-                gr.Markdown("""
-                <div style="color: var(--secondary-text); margin-bottom: 10px;">
-                    Click on any example image below to load it for analysis:
-                </div>
-                """)
-                
-                with gr.Row():
-                    for img_path, label in example_images:
-                        if os.path.exists(img_path):
-                            with gr.Column(scale=1, min_width=100):
-                                example = gr.Image(
-                                    value=img_path,
-                                    visible=True,
-                                    label=label,
-                                    height=100,
-                                    width=100,
-                                    show_label=False,
-                                    interactive=False,
-                                    elem_id=f"example_{label.split(' ')[0]}"
-                                )
-                                gr.Markdown(f"""
-                                <div class="example-label">{label}</div>
-                                """)
-                                example.click(
-                                    lambda x: x,
-                                    inputs=[example],
-                                    outputs=[image_input],
-                                    show_progress=False
-                                )
-                        else:
-                            print(f"Warning: Example image not found at {img_path}")
+# In the example images section, replace the example image creation with this:
+
+with gr.Accordion("📁 Example Images", open=True):
+    gr.Markdown("""
+    <div style="color: var(--secondary-text); margin-bottom: 10px;">
+        Click on any example image below to load it for analysis:
+    </div>
+    """)
+    
+    with gr.Row():
+        for img_path, label in example_images:
+            if os.path.exists(img_path):
+                with gr.Column(scale=1, min_width=100):
+                    # Create a button with the image as its value
+                    example_btn = gr.Button(
+                        value=img_path,
+                        label=label,
+                        variant="secondary",
+                        elem_classes="example-btn"
+                    )
+                    # Add click event
+                    example_btn.click(
+                        lambda x: x,
+                        inputs=[example_btn],
+                        outputs=[image_input],
+                        show_progress=False
+                    )
+            else:
+                print(f"Warning: Example image not found at {img_path}")
             
             # Options section
             with gr.Accordion("⚙️ Analysis Options", open=False):
