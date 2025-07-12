@@ -199,6 +199,7 @@ custom_css = """
     border: 2px solid transparent;
     transition: all 0.3s ease;
     margin: 0 auto;
+    color: transparent !important;
 }
 .example-btn:hover {
     transform: scale(1.05);
@@ -220,38 +221,46 @@ with gr.Blocks(css=custom_css) as demo:
             image_input = gr.Image(label="Upload Image", type="numpy")
             submit_btn = gr.Button("Analyze", variant="primary")
             
-            # Example images
+            # Example images - CORRECTED IMPLEMENTATION
             with gr.Accordion("Example Images", open=True):
                 gr.Markdown("Click an example to load it:")
                 with gr.Row():
+                    example_btns = []
                     for img_path, label in example_images:
                         if os.path.exists(img_path):
                             with gr.Column():
-                                example_btn = gr.Button(label="", elem_classes=["example-btn"])
+                                # Create button with empty value
+                                example_btn = gr.Button(elem_classes=["example-btn"])
                                 gr.Markdown(f"<div class='example-label'>{label}</div>")
-                                # Set background image
-                                example_btn.click(
-                                    None,
-                                    None,
-                                    None,
-                                    _js=f"""
-                                    () => {{
-                                        document.querySelector('#{example_btn.elem_id}').style.backgroundImage = "url('{img_path}')";
-                                        return [];
-                                    }}
-                                    """
-                                )
-                                # Load image on click
-                                example_btn.click(
-                                    lambda x: x,
-                                    inputs=[gr.Image(value=img_path, visible=False)],
-                                    outputs=[image_input]
-                                )
+                                example_btns.append((example_btn, img_path))
             
         with gr.Column(scale=2):
-            # Results
             diagnosis_output = gr.HTML()
             plot_output = gr.Plot()
+    
+    # Set background images after components are created
+    demo.load(
+        None,
+        None,
+        None,
+        _js="""
+        function() {
+            """ + "\n".join([
+                f"document.querySelector('#{btn.elem_id}').style.backgroundImage = \"url('{img_path}')\";"
+                for btn, img_path in example_btns
+            ]) + """
+            return [];
+        }
+        """
+    )
+    
+    # Set click events for example buttons
+    for btn, img_path in example_btns:
+        btn.click(
+            lambda x: x,
+            inputs=[gr.Image(value=img_path, visible=False)],
+            outputs=[image_input]
+        )
     
     submit_btn.click(
         fn=analyze_image,
