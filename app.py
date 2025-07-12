@@ -725,6 +725,8 @@ with gr.Blocks(
             # Example images section
 # In the example images section, replace the example image creation with this:
 
+# In the example images section, replace with this:
+
 with gr.Accordion("📁 Example Images", open=True):
     gr.Markdown("""
     <div style="color: var(--secondary-text); margin-bottom: 10px;">
@@ -736,20 +738,34 @@ with gr.Accordion("📁 Example Images", open=True):
         for img_path, label in example_images:
             if os.path.exists(img_path):
                 with gr.Column(scale=1, min_width=100):
-                    # Create a button with the image as its value
+                    # Create a button with custom HTML for the image
                     example_btn = gr.Button(
-                        value=img_path,
-                        label=label,
-                        variant="secondary",
-                        elem_classes="example-btn"
+                        elem_classes="example-btn",
+                        interactive=True
                     )
-                    # Add click event
+                    # Set the background image using JavaScript
+                    example_btn.click(
+                        None,
+                        None,
+                        None,
+                        _js=f"""
+                        () => {{
+                            document.querySelector('#{example_btn.elem_id}').style.backgroundImage = "url('{img_path}')";
+                            return [];
+                        }}
+                        """
+                    )
+                    # Add click event to load the image
                     example_btn.click(
                         lambda x: x,
-                        inputs=[example_btn],
+                        inputs=[gr.Image(value=img_path, visible=False)],
                         outputs=[image_input],
                         show_progress=False
                     )
+                    # Add the label below
+                    gr.Markdown(f"""
+                    <div class="example-label">{label}</div>
+                    """)
             else:
                 print(f"Warning: Example image not found at {img_path}")
             
