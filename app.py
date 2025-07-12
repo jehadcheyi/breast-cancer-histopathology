@@ -177,38 +177,35 @@ def analyze_image(input_img):
         error_html = f"<div style='color: red;'>Error: {str(e)}</div>"
         return error_html, None
 
-# Example images
+example_dir = os.path.join(os.path.dirname(__file__), 'example')
 example_images = [
-    ("example/SOB_B_A-14-22549AB-40-001.png", "Adenosis (Benign)"),
-    ("example/SOB_B_F-14-9133-100-001.png", "Fibroadenoma (Benign)"),
-    ("example/SOB_M_DC-14-2523-40-010.png", "Ductal Carcinoma (Malignant)")
+    (os.path.join(example_dir, "SOB_B_A-14-22549AB-40-001.png"), "Adenosis (Benign)"),
+    (os.path.join(example_dir, "SOB_B_F-14-9133-100-001.png"), "Fibroadenoma (Benign)"),
+    (os.path.join(example_dir, "SOB_M_DC-14-2523-40-010.png"), "Ductal Carcinoma (Malignant)")
 ]
 
 # Custom CSS
 custom_css = """
-:root {
-    --primary-text: #2c3e50;
-    --secondary-text: #7f8c8d;
-    --diagnosis-text: #4a6fa5;
-}
 .example-btn {
     height: 100px;
     width: 100px;
     background-size: cover;
     background-position: center;
-    border: 2px solid transparent;
+    border: 2px solid #ddd;
     transition: all 0.3s ease;
     margin: 0 auto;
-    color: transparent !important;
+    display: block;
+    cursor: pointer;
 }
 .example-btn:hover {
     transform: scale(1.05);
-    border-color: var(--diagnosis-text);
+    border-color: #4a6fa5;
 }
 .example-label {
     text-align: center;
     margin-top: 5px;
-    color: var(--secondary-text);
+    color: #7f8c8d;
+    font-size: 12px;
 }
 """
 
@@ -221,37 +218,41 @@ with gr.Blocks(css=custom_css) as demo:
             image_input = gr.Image(label="Upload Image", type="numpy")
             submit_btn = gr.Button("Analyze", variant="primary")
             
-            # Example images - PROPERLY IMPLEMENTED
+            # Example images - WORKING IMPLEMENTATION
             with gr.Accordion("Example Images", open=True):
                 gr.Markdown("Click an example to load it:")
                 with gr.Row():
                     for img_path, label in example_images:
                         if os.path.exists(img_path):
                             with gr.Column():
-                                # Create button with custom HTML
-                                example_btn = gr.HTML(
+                                # Create a clickable HTML element
+                                example_html = gr.HTML(
                                     f"""
-                                    <div class="example-container" style="text-align: center;">
-                                        <button class="example-btn" 
-                                                onclick="document.getElementById('hidden-img-{label.replace(' ', '-')}').click()"
-                                                style="background-image: url('{img_path}')">
-                                        </button>
+                                    <div style="text-align: center;">
+                                        <div class="example-btn" 
+                                             onclick="document.getElementById('input-{label.replace(' ', '-')}').click()"
+                                             style="background-image: url('file={img_path}')">
+                                        </div>
                                         <div class="example-label">{label}</div>
+                                        <input type="file" id="input-{label.replace(' ', '-')}" 
+                                               style="display: none" onchange="document.getElementById('output-img').click()">
                                     </div>
                                     """
                                 )
-                                # Hidden clickable element
-                                hidden_img = gr.Image(
-                                    value=img_path,
+                                # Hidden components to handle the image loading
+                                hidden_image = gr.Image(
+                                    value=img_path, 
                                     visible=False,
-                                    elem_id=f"hidden-img-{label.replace(' ', '-')}"
+                                    elem_id=f"output-img"
                                 )
-                                # Set click action
-                                hidden_img.change(
+                                # Set the change event
+                                hidden_image.change(
                                     lambda x: x,
-                                    inputs=[hidden_img],
+                                    inputs=[hidden_image],
                                     outputs=[image_input]
                                 )
+                        else:
+                            print(f"Warning: Example image not found at {img_path}")
             
         with gr.Column(scale=2):
             diagnosis_output = gr.HTML()
