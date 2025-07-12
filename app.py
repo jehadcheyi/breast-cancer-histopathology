@@ -230,10 +230,7 @@ def create_visualization(img, pred_idx, binary_conf, label, subtype_conf, zooms=
     color = 'green' if diagnosis == 'BENIGN' else 'red'
 
     plt.suptitle(
-        f"\n\n"
-        f"\n\n"
-        f"\n\n"
-        f"BREAST TISSUE HISTOPATHOLOGY ANALYSIS\n\n"
+        f"\n\n\n\nBREAST TISSUE HISTOPATHOLOGY ANALYSIS\n\n"
         f"Primary Diagnosis: {diagnosis} ({binary_conf:.1f}% confidence)\n"
         f"Attention Visualization at Multiple Scales",
         fontsize=14,
@@ -656,14 +653,14 @@ td {
 
 # Example images (assuming they're in an 'examples' folder)
 example_images = [
-    ("examples/adenosis.jpg", "Adenosis (Benign)"),
-    ("examples/fibroadenoma.jpg", "Fibroadenoma (Benign)"),
-    ("examples/phyllodes.jpg", "Phyllodes Tumor (Benign)"),
-    ("examples/tubular_adenoma.jpg", "Tubular Adenoma (Benign)"),
-    ("examples/ductal_carcinoma.jpg", "Ductal Carcinoma (Malignant)"),
-    ("examples/lobular_carcinoma.jpg", "Lobular Carcinoma (Malignant)"),
-    ("examples/mucinous_carcinoma.jpg", "Mucinous Carcinoma (Malignant)"),
-    ("examples/papillary_carcinoma.jpg", "Papillary Carcinoma (Malignant)")
+    ("examples/SOB_B_A-14-22549AB-40-001.png", "Adenosis (Benign)"),
+    ("examples/SOB_B_F-14-9133-100-001.png", "Fibroadenoma (Benign)"),
+    ("examples/SOB_B_PT-14-21998AB-40-001.png", "Phyllodes Tumor (Benign)"),
+
+    ("examples/SOB_M_DC-14-2523-40-010.png", "Ductal Carcinoma (Malignant)"),
+    ("examples/SOB_M_LC-14-12204-40-001.png", "Lobular Carcinoma (Malignant)"),
+
+    ("examples/SOB_M_PC-14-15704-100-002.png", "Papillary Carcinoma (Malignant)")
 ]
 
 # Gradio UI with modern design and color scheme
