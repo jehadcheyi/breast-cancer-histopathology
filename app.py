@@ -155,8 +155,13 @@ def analyze_image(input_img):
         diagnosis = label.upper()
         diagnosis_color = "#4CAF50" if diagnosis == "BENIGN" else "#F44336"
         
-        subtype_table = "<table style='width:100%; border-collapse: collapse; margin: 15px 0;'>"
-        subtype_table += "<tr style='background-color: #f2f2f2;'><th>Subtype</th><th>Confidence</th></tr>"
+subtype_table = """
+<table style='width:100%; border-collapse: collapse; margin: 15px 0;'>
+<tr style='background-color: #f2f2f2;'>
+    <th style='color: #0D47A1;'>Subtype</th>
+    <th style='color: #0D47A1;'>Confidence</th>
+</tr>
+"""
         for name, prob in subtype_probs.items():
             subtype_table += f"<tr><td>{name}</td><td style='font-weight: bold;'>{prob:.1f}%</td></tr>"
         subtype_table += "</table>"
@@ -193,7 +198,6 @@ def analyze_image(input_img):
         return error_html, None
 
 
-# [Previous imports and model setup code remains the same until get_sample_images()]
 
 def get_sample_images():
     sample_images = []
@@ -293,10 +297,10 @@ def create_visualization(img, pred_idx, binary_conf, label, subtype_conf, zooms=
     color = 'green' if diagnosis == 'BENIGN' else 'red'
 
     plt.suptitle(
-        f"BREAST TISSUE HISTOPATHOLOGY ANALYSIS\n\n"
+        f"\n\n\n\nBREAST TISSUE HISTOPATHOLOGY ANALYSIS\n\n"
         f"Primary Diagnosis: {diagnosis} ({binary_conf:.1f}% confidence)\n"
         f"Attention Visualization at Multiple Scales",
-        fontsize=14,
+        fontsize=20,
         y=1.02,
         color=color,
         fontweight='bold'
