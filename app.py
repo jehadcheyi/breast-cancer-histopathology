@@ -210,7 +210,7 @@ def get_sample_images():
     sample_folder = "example"
     if os.path.exists(sample_folder):
         for file in os.listdir(sample_folder):
-            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+            if file.lower().endswith(('.png', '.jpg', '.jpeg', '.tif')):
                 try:
                     img_path = os.path.join(sample_folder, file)
                     img = cv2.imread(img_path)
