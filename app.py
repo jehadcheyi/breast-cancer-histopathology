@@ -190,6 +190,8 @@ def analyze_image(input_img):
         """
         return error_html, None
 
+# [Previous imports and model setup code remains the same until get_sample_images()]
+
 def get_sample_images():
     sample_images = []
     sample_folder = "example"
@@ -201,12 +203,105 @@ def get_sample_images():
                     img = cv2.imread(img_path)
                     if img is not None:
                         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                        sample_images.append((img, file))
+                        sample_images.append((img, file))  # Store both image and filename
                 except Exception as e:
                     print(f"Error loading sample image {file}: {e}")
     return sample_images
 
 sample_images = get_sample_images()
+
+def get_crop_box(shape, percent):
+    """Calculate centered crop box coordinates"""
+    h, w = shape[:2]
+    crop_h = int(h * percent / 100)
+    crop_w = int(w * percent / 100)
+    left = (w - crop_w) // 2
+    top = (h - crop_h) // 2
+    return left, top, left + crop_w, top + crop_h
+
+def create_visualization(img, pred_idx, binary_conf, label, subtype_conf, zooms=[75, 50, 25]):
+    """Create visualization with detailed explanations"""
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)  # Convert back to BGR for OpenCV
+    h, w = img.shape[:2]
+    levels = 1 + len(zooms)
+
+    fig, axs = plt.subplots(levels, 3, figsize=(18, 6 * levels), dpi=100)
+    if levels == 1:
+        axs = [axs]  # Ensure axs is always 2D
+
+    # Full image analysis
+    resized = cv2.resize(img, target_size)
+    heatmap = make_heatmap(img, pred_idx)
+    overlay = cv2.addWeighted(resized, 0.6, heatmap, 0.4, 0)
+
+    # Convert back to RGB for display
+    resized_rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+    heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+    overlay_rgb = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+
+    axs[0][0].imshow(resized_rgb)
+    axs[0][0].set_title("Original Tissue Sample\n(Full View)", fontsize=12, pad=10)
+    axs[0][0].axis('off')
+
+    axs[0][1].imshow(heatmap_rgb)
+    axs[0][1].set_title("Model Attention Heatmap\n(Red = High Importance)", fontsize=12, pad=10)
+    axs[0][1].axis('off')
+
+    axs[0][2].imshow(overlay_rgb)
+    axs[0][2].set_title("Attention Overlay\n(Where the model focuses)", fontsize=12, pad=10)
+    axs[0][2].axis('off')
+
+    # Zoomed analysis
+    for i, zoom in enumerate(zooms):
+        x1, y1, x2, y2 = get_crop_box(img.shape, zoom)
+        crop = img[y1:y2, x1:x2]
+
+        resized_crop = cv2.resize(crop, target_size)
+        crop_heat = make_heatmap(crop, pred_idx)
+        crop_over = cv2.addWeighted(resized_crop, 0.6, crop_heat, 0.4, 0)
+
+        mask = np.zeros((h, w), dtype=np.uint8)
+        mask[y1:y2, x1:x2] = 1
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+        highlight = np.where(mask[..., None], img, gray_rgb)
+        cv2.rectangle(highlight, (x1, y1), (x2, y2), (255, 0, 0), 3)
+
+        # Convert to RGB for display
+        highlight_rgb = cv2.cvtColor(highlight, cv2.COLOR_BGR2RGB)
+        resized_crop_rgb = cv2.cvtColor(resized_crop, cv2.COLOR_BGR2RGB)
+        crop_heat_rgb = cv2.cvtColor(crop_heat, cv2.COLOR_BGR2RGB)
+        crop_over_rgb = cv2.cvtColor(crop_over, cv2.COLOR_BGR2RGB)
+
+        axs[i+1][0].imshow(highlight_rgb)
+        axs[i+1][0].set_title(f"Analysis Area: {zoom}% of Image\n(rectangle shows zoom region)", fontsize=12, pad=10)
+        axs[i+1][0].axis('off')
+
+        axs[i+1][1].imshow(crop_heat_rgb)
+        axs[i+1][1].set_title(f"Zoomed Attention Heatmap\n(Detailed view at {zoom}% scale)", fontsize=12, pad=10)
+        axs[i+1][1].axis('off')
+
+        axs[i+1][2].imshow(crop_over_rgb)
+        axs[i+1][2].set_title(f"Zoomed Overlay\n(Combined view at {zoom}% scale)", fontsize=12, pad=10)
+        axs[i+1][2].axis('off')
+
+    # Main title with diagnosis information
+    diagnosis = classes['binary'][pred_idx].upper()
+    color = 'green' if diagnosis == 'BENIGN' else 'red'
+
+    plt.suptitle(
+        f"BREAST TISSUE HISTOPATHOLOGY ANALYSIS\n\n"
+        f"Primary Diagnosis: {diagnosis} ({binary_conf:.1f}% confidence)\n"
+        f"Attention Visualization at Multiple Scales",
+        fontsize=14,
+        y=1.02,
+        color=color,
+        fontweight='bold'
+    )
+
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.88)
+    return fig
 
 # Gradio UI
 with gr.Blocks(title="Breast Cancer Histopathology Analysis") as demo:
@@ -216,17 +311,18 @@ with gr.Blocks(title="Breast Cancer Histopathology Analysis") as demo:
             image_input = gr.Image(type="numpy")
             submit_btn = gr.Button("Analyze Image", variant="primary")
             
-            # Gallery of sample images
+            # Gallery of sample images with names
             if sample_images:
-                gr.Markdown("## Sample Images")
-                # Create a list of just the image arrays for the gallery
-                gallery_images = [img for img, name in sample_images]
+                gr.Markdown("## Example Images")
+                # Create a list of (image, name) tuples for the gallery
+                gallery_items = [(img, name) for img, name in sample_images]
                 gallery = gr.Gallery(
-                    value=gallery_images,
-                    label="Click on a sample image to load it",
+                    value=gallery_items,
+                    label="Click on an example image to load it",
                     columns=3,
                     height="auto",
-                    object_fit="contain"
+                    object_fit="contain",
+                    show_label=True
                 )
                 
                 def select_sample_image(evt: gr.SelectData):
@@ -234,14 +330,13 @@ with gr.Blocks(title="Breast Cancer Histopathology Analysis") as demo:
                 
                 gallery.select(select_sample_image, None, image_input)
             else:
-                gr.Markdown("No sample images found in the 'sample' folder")
+                gr.Markdown("No example images found in the 'example' folder")
         
         with gr.Column(scale=2):
-            with gr.Tabs():
-                with gr.Tab("Diagnosis"):
-                    diagnosis_output = gr.HTML()
-                with gr.Tab("Visualization"):
-                    plot_output = gr.Plot()
+            diagnosis_output = gr.HTML(
+                value="<div style='text-align: center; padding: 40px;'>Analysis results will appear here after processing an image.</div>"
+            )
+            plot_output = gr.Plot()
     
     submit_btn.click(
         fn=analyze_image,
