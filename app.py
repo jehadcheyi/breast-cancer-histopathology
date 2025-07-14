@@ -190,13 +190,23 @@ def analyze_image(input_img):
         """
         return error_html, None
 
-# Get sample images from 'sample' folder
-sample_images = []
-sample_folder = "sample"
-if os.path.exists(sample_folder):
-    for file in os.listdir(sample_folder):
-        if file.lower().endswith(('.png', '.jpg', '.jpeg')):
-            sample_images.append(os.path.join(sample_folder, file))
+def get_sample_images():
+    sample_images = []
+    sample_folder = "sample"
+    if os.path.exists(sample_folder):
+        for file in os.listdir(sample_folder):
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                try:
+                    img_path = os.path.join(sample_folder, file)
+                    img = cv2.imread(img_path)
+                    if img is not None:
+                        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                        sample_images.append((img, file))
+                except Exception as e:
+                    print(f"Error loading sample image {file}: {e}")
+    return sample_images
+
+sample_images = get_sample_images()
 
 # Gradio UI
 with gr.Blocks(title="Breast Cancer Histopathology Analysis") as demo:
@@ -209,25 +219,28 @@ with gr.Blocks(title="Breast Cancer Histopathology Analysis") as demo:
             # Gallery of sample images
             if sample_images:
                 gr.Markdown("## Sample Images")
+                # Create a list of just the image arrays for the gallery
+                gallery_images = [img for img, name in sample_images]
                 gallery = gr.Gallery(
-                    value=sample_images,
+                    value=gallery_images,
                     label="Click on a sample image to load it",
                     columns=3,
-                    height="auto"
+                    height="auto",
+                    object_fit="contain"
                 )
                 
                 def select_sample_image(evt: gr.SelectData):
-                    return cv2.imread(evt.value)[:,:,::-1]  # Read and convert BGR to RGB
+                    return sample_images[evt.index][0]
                 
                 gallery.select(select_sample_image, None, image_input)
+            else:
+                gr.Markdown("No sample images found in the 'sample' folder")
         
         with gr.Column(scale=2):
             with gr.Tabs():
-                with gr.TabItem("Diagnosis"):
-                    diagnosis_output = gr.HTML(
-                        value="<div style='text-align: center; padding: 40px;'>Analysis results will appear here after processing an image.</div>"
-                    )
-                with gr.TabItem("Visualization"):
+                with gr.Tab("Diagnosis"):
+                    diagnosis_output = gr.HTML()
+                with gr.Tab("Visualization"):
                     plot_output = gr.Plot()
     
     submit_btn.click(
