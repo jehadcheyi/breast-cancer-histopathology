@@ -149,8 +149,10 @@ def analyze_image(input_img):
         img = input_img.astype('uint8')
         pred_idx, binary_conf, subtype, subtype_conf, subtype_probs = predict(img)
 
+        label = classes['binary'][pred_idx]  # Added line to get label
+
         # Create diagnosis HTML
-        diagnosis = classes['binary'][pred_idx].upper()
+        diagnosis = label.upper()
         diagnosis_color = "#4CAF50" if diagnosis == "BENIGN" else "#F44336"
         
         subtype_table = "<table style='width:100%; border-collapse: collapse; margin: 15px 0;'>"
@@ -176,8 +178,8 @@ def analyze_image(input_img):
         </div>
         """
 
-        # Create visualization
-        fig = create_visualization(img, pred_idx)
+        # ✅ FIXED CALL:
+        fig = create_visualization(img, pred_idx, binary_conf, label, subtype_conf)
 
         return diagnosis_html, fig
 
@@ -189,6 +191,7 @@ def analyze_image(input_img):
         </div>
         """
         return error_html, None
+
 
 # [Previous imports and model setup code remains the same until get_sample_images()]
 
