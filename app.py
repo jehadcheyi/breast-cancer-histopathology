@@ -149,25 +149,30 @@ def analyze_image(input_img):
         img = input_img.astype('uint8')
         pred_idx, binary_conf, subtype, subtype_conf, subtype_probs = predict(img)
 
-        label = classes['binary'][pred_idx]  # Added line to get label
-
-        # Create diagnosis HTML
+        label = classes['binary'][pred_idx]  # Get label: 'benign' or 'malignant'
         diagnosis = label.upper()
         diagnosis_color = "#4CAF50" if diagnosis == "BENIGN" else "#F44336"
-        
-subtype_table = """
-<table style='width:100%; border-collapse: collapse; margin: 15px 0;'>
-<tr style='background-color: #f2f2f2;'>
-    <th style='color: #0D47A1;'>Subtype</th>
-    <th style='color: #0D47A1;'>Confidence</th>
-</tr>
-"""
+
+        # Table with colored header text
+        subtype_table = """
+        <table style='width:100%; border-collapse: collapse; margin: 15px 0; font-family: Arial, sans-serif;'>
+            <tr style='background-color: #f2f2f2;'>
+                <th style='color: #0D47A1; padding: 8px; text-align: left;'>Subtype</th>
+                <th style='color: #0D47A1; padding: 8px; text-align: left;'>Confidence</th>
+            </tr>
+        """
         for name, prob in subtype_probs.items():
-            subtype_table += f"<tr><td>{name}</td><td style='font-weight: bold;'>{prob:.1f}%</td></tr>"
+            subtype_table += f"""
+            <tr>
+                <td style='padding: 8px;'>{name}</td>
+                <td style='padding: 8px; font-weight: bold;'>{prob:.1f}%</td>
+            </tr>
+            """
         subtype_table += "</table>"
 
+        # Diagnosis summary box
         diagnosis_html = f"""
-        <div style="border: 2px solid {diagnosis_color}; border-radius: 8px; padding: 20px; margin: 20px 0;">
+        <div style="border: 2px solid {diagnosis_color}; border-radius: 8px; padding: 20px; margin: 20px 0; font-family: Arial, sans-serif;">
             <h2 style="color: {diagnosis_color}; margin: 0;">Diagnosis: {diagnosis}</h2>
             <div style="background-color: {diagnosis_color}; color: white; padding: 5px 15px; border-radius: 20px; display: inline-block; margin: 10px 0;">
                 {binary_conf:.1f}% Confidence
@@ -183,7 +188,7 @@ subtype_table = """
         </div>
         """
 
-        # ✅ FIXED CALL:
+        # Create visualization with Grad-CAM overlay
         fig = create_visualization(img, pred_idx, binary_conf, label, subtype_conf)
 
         return diagnosis_html, fig
@@ -196,6 +201,7 @@ subtype_table = """
         </div>
         """
         return error_html, None
+
 
 
 
