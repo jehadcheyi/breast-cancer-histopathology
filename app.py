@@ -36,6 +36,18 @@ for name, path in model_paths.items():
 print("Loading models...")
 try:
     models = {name: load_model(path) for name, path in model_paths.items()}
+    
+    # Grad-CAM setup
+    binary_model = models['binary']
+    last_conv = None
+    for layer in reversed(binary_model.layers):
+        if isinstance(layer, tf.keras.layers.Conv2D):
+            last_conv = layer.name
+            break
+
+    grad_model = Model(inputs=binary_model.inputs,
+                      outputs=[binary_model.get_layer(last_conv).output, binary_model.output])
+
     print("Models loaded successfully!")
 except Exception as e:
     print(f"Error loading models: {e}")
@@ -83,6 +95,55 @@ def predict(img):
         print(f"Error during prediction: {str(e)}")
         raise
 
+def make_heatmap(img, pred_idx):
+    """Generate Grad-CAM heatmap"""
+    resized = cv2.resize(img, img_size)
+    img_in = resized.astype(np.float32) / 255.0
+    img_in = np.expand_dims(img_in, axis=0)
+
+    with tf.GradientTape() as tape:
+        conv_out, preds = grad_model(img_in)
+        loss = preds[:, pred_idx]
+
+    grads = tape.gradient(loss, conv_out)[0]
+    pooled = tf.reduce_mean(grads, axis=(0, 1))
+    conv_out = conv_out[0]
+    heatmap = conv_out @ pooled[..., tf.newaxis]
+    heatmap = tf.squeeze(heatmap)
+    heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
+    heatmap = heatmap.numpy()
+
+    heatmap = cv2.resize(heatmap, target_size)
+    return cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET)
+
+def create_visualization(img, pred_idx):
+    """Create visualization with heatmap"""
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    resized = cv2.resize(img, target_size)
+    heatmap = make_heatmap(img, pred_idx)
+    overlay = cv2.addWeighted(resized, 0.6, heatmap, 0.4, 0)
+
+    # Convert back to RGB for display
+    resized_rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+    heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+    overlay_rgb = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+
+    fig, ax = plt.subplots(1, 3, figsize=(18, 6))
+    ax[0].imshow(resized_rgb)
+    ax[0].set_title("Original Image")
+    ax[0].axis('off')
+
+    ax[1].imshow(heatmap_rgb)
+    ax[1].set_title("Attention Heatmap")
+    ax[1].axis('off')
+
+    ax[2].imshow(overlay_rgb)
+    ax[2].set_title("Attention Overlay")
+    ax[2].axis('off')
+
+    plt.tight_layout()
+    return fig
+
 def analyze_image(input_img):
     try:
         img = input_img.astype('uint8')
@@ -115,7 +176,10 @@ def analyze_image(input_img):
         </div>
         """
 
-        return diagnosis_html
+        # Create visualization
+        fig = create_visualization(img, pred_idx)
+
+        return diagnosis_html, fig
 
     except Exception as e:
         error_html = f"""
@@ -124,7 +188,7 @@ def analyze_image(input_img):
             <p>{str(e)}</p>
         </div>
         """
-        return error_html
+        return error_html, None
 
 # Get sample images from 'sample' folder
 sample_images = []
@@ -153,19 +217,23 @@ with gr.Blocks(title="Breast Cancer Histopathology Analysis") as demo:
                 )
                 
                 def select_sample_image(evt: gr.SelectData):
-                    return evt.value
+                    return cv2.imread(evt.value)[:,:,::-1]  # Read and convert BGR to RGB
                 
                 gallery.select(select_sample_image, None, image_input)
         
         with gr.Column(scale=2):
-            diagnosis_output = gr.HTML(
-                value="<div style='text-align: center; padding: 40px;'>Analysis results will appear here after processing an image.</div>"
-            )
+            with gr.Tabs():
+                with gr.TabItem("Diagnosis"):
+                    diagnosis_output = gr.HTML(
+                        value="<div style='text-align: center; padding: 40px;'>Analysis results will appear here after processing an image.</div>"
+                    )
+                with gr.TabItem("Visualization"):
+                    plot_output = gr.Plot()
     
     submit_btn.click(
         fn=analyze_image,
         inputs=image_input,
-        outputs=diagnosis_output
+        outputs=[diagnosis_output, plot_output]
     )
 
 demo.launch(share=True)
