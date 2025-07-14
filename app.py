@@ -192,7 +192,7 @@ def analyze_image(input_img):
 
 def get_sample_images():
     sample_images = []
-    sample_folder = "sample"
+    sample_folder = "example"
     if os.path.exists(sample_folder):
         for file in os.listdir(sample_folder):
             if file.lower().endswith(('.png', '.jpg', '.jpeg')):
