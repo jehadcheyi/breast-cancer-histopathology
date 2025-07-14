@@ -52,3 +52,4 @@ example/SOB_M_DC-14-2773-40-001.png filter=lfs diff=lfs merge=lfs -text
 example/SOB_M_LC-14-12204-40-004.png filter=lfs diff=lfs merge=lfs -text
 example/SOB_M_MC-14-10147-40-004.png filter=lfs diff=lfs merge=lfs -text
 example/SOB_M_PC-14-9146-40-004.png filter=lfs diff=lfs merge=lfs -text
+example/CRC-Prim-HE-01_APPLICATION.tif filter=lfs diff=lfs merge=lfs -text
