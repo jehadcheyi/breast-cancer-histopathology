@@ -320,7 +320,7 @@ def create_visualization(img, pred_idx, binary_conf, label, subtype_conf, zooms=
 with gr.Blocks(title="BREAST AI - Advanced Cancer Detection", theme="soft") as demo:
     # Hero Section
     gr.Markdown("""
-<div style="width: 100%; max-width: 800px; margin: 0 auto; text-align: center;">
+<div style="text-align: center;">
     <h1 style='margin-bottom: 10px;'>BREAST AI PRO</h1>
     <h2 style='margin-top: 0;'>
         Great AI Application for Breast Cancer Detection<br>
@@ -337,7 +337,8 @@ with gr.Blocks(title="BREAST AI - Advanced Cancer Detection", theme="soft") as d
         ارفع صورة أو اختر من النماذج<br>
         وێنەکی دابگرە یان نموونەکی بهەڵبژێرە
     </p>
-<hr style="margin: 30px 0;">
+    <hr style="margin: 30px auto; width: 80%;">
+</div>
 """)
 
     with gr.Row():
