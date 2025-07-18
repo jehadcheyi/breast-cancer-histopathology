@@ -319,14 +319,35 @@ def create_visualization(img, pred_idx, binary_conf, label, subtype_conf, zooms=
 
 with gr.Blocks(title="BREAST AI - Advanced Cancer Detection", theme="soft") as demo:
     # Hero Section
-    gr.Markdown("""
-    <div style='background: linear-gradient(135deg, #6e48aa 0%, #9d50bb 100%); padding: 20px; border-radius: 10px; color: white;'>
-    <h1 style='text-align: center; margin-bottom: 10px;'>BREAST AI PRO </h1>
-    <h2 style='text-align: center; margin-top: 0;'>Great AI Application for Breast Cancer Detection<br>أحدث نظام ذكاء اصطناعي لكشف سرطان الثدي<br> نویترین پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان </h2>
-    <p style='text-align: center; font-size: 16px;'>Powered by Revolutionary Deep Learning • 98% Accuracy<br>٪مدعوم بأحدث تقنيات التعلم العميق - بدقة 98 <br>پشتگیریا فێربوونا کویرا نوی - برێژا ٪98</p>
-    <p style='text-align: center; font-size: 16px;'>Upload an image or select from examples below<br>ارفع صورة أو اختر من النماذج<br>وێنەکی دابگرە یان نموونەکی بهەڵبژێرە</p>
-    </div>
-    """)
+gr.Markdown("""
+<div style='
+    background: linear-gradient(135deg, #6e48aa 0%, #9d50bb 100%);
+    padding: 20px;
+    border-radius: 10px;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+'>
+    <h1 style='margin-bottom: 10px;'>BREAST AI PRO</h1>
+    <h2 style='margin-top: 0;'>
+        Great AI Application for Breast Cancer Detection<br>
+        أحدث نظام ذكاء اصطناعي لكشف سرطان الثدي<br>
+        نویترین پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان
+    </h2>
+    <p style='font-size: 16px;'>
+        Powered by Revolutionary Deep Learning • 98% Accuracy<br>
+        ٪مدعوم بأحدث تقنيات التعلم العميق - بدقة 98<br>
+        پشتگیریا فێربوونا کویرا نوی - برێژا ٪98
+    </p>
+    <p style='font-size: 16px;'>
+        Upload an image or select from examples below<br>
+        ارفع صورة أو اختر من النماذج<br>
+        وێنەکی دابگرە یان نموونەکی بهەڵبژێرە
+    </p>
+</div>
+""")
 
     with gr.Row():
         # Left Panel
