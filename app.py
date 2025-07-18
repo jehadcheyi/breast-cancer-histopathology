@@ -323,7 +323,8 @@ with gr.Blocks(title="BREAST AI - Advanced Cancer Detection", theme="soft") as d
     <div style='background: linear-gradient(135deg, #6e48aa 0%, #9d50bb 100%); padding: 20px; border-radius: 10px; color: white;'>
     <h1 style='text-align: center; margin-bottom: 10px;'>BREAST AI PRO</h1>
     <h2 style='text-align: center; margin-top: 0;'>World's Most Advanced AI for Breast Cancer Detection</h2>
-    <p style='text-align: center; font-size: 16px;'>Powered by Revolutionary Deep Learning Architecture • 98.7% Validation Accuracy</p>
+    <p style='text-align: center; font-size: 16px;'>Powered by Revolutionary Deep Learning Architecture • 98 % Validation Accuracy</p>
+    <p style='text-align: center; font-size: 16px;'>Upload image or select from Examples</p>
     </div>
     """)
 
@@ -335,13 +336,13 @@ with gr.Blocks(title="BREAST AI - Advanced Cancer Detection", theme="soft") as d
                 gr.Markdown("""
                 ## 🔬 AI-Powered Histopathology Analysis
                 Our cutting-edge system detects malignant patterns with unprecedented accuracy:
-                - Identifies 17 subtypes of breast carcinoma
+                - Identifies subtypes of Malignant and Benugn carcinoma
                 - Processes in 1/10th the time of human pathologists
                 """)
                 
-                image_input = gr.Image(type="numpy", label="Upload Histopathology Slide")
+                image_input = gr.Image(type="numpy", label="Upload Histopathology Image")
                 gr.Markdown("""
-                <small>Supported: WSIs (40X, 100X, 200X, 400X) • DICOM compatible</small>
+                <small>Supported: jpg, jpeg, png, tif (</small>
                 """)
                 
                 with gr.Row():
@@ -403,7 +404,7 @@ with gr.Blocks(title="BREAST AI - Advanced Cancer Detection", theme="soft") as d
     # Footer
     gr.Markdown("""
     <div style='text-align: center; margin-top: 20px; font-size: 12px;'>
-    <p>© 2023 BREAST AI Technologies | Research Use Only</p>
+    <p>© 2025 BREAST AI Technologies | Research Use Only</p>
     </div>
     """)
 
