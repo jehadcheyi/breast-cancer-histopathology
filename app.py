@@ -317,41 +317,41 @@ with gr.Blocks(
     title="BREAST AI - Advanced Cancer Detection",
     theme="soft",
     css="""
-    .center-content {
+    .centered-container {
         display: flex !important;
-        flex-direction: column !important;
+        justify-content: center !important;
         align-items: center !important;
+        flex-direction: column !important;
+        width: 100% !important;
         text-align: center !important;
-        width: 100% !important;
         margin: 0 auto !important;
+        padding: 20px !important;
     }
-    .center-content h1,
-    .center-content h2,
-    .center-content p {
-        margin: 0.5rem 0 !important;
-        width: 100% !important;
+    .centered-container * {
+        max-width: 100% !important;
+        margin: 5px 0 !important;
     }
     """
 ) as demo:
     gr.Markdown("""
-    <div class="center-content">
-        <h1>BREAST AI PRO</h1>
-        <h2>
+    <div class="centered-container">
+        <h1 style="font-size: 2.5em;">BREAST AI PRO</h1>
+        <h2 style="font-size: 1.5em;">
             Great AI Application for Breast Cancer Detection<br>
             أحدث نظام ذكاء اصطناعي لكشف سرطان الثدي<br>
             نویترین پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان
         </h2>
-        <p>
+        <p style="font-size: 1.2em;">
             Powered by Revolutionary Deep Learning • 98% Accuracy<br>
             ٪مدعوم بأحدث تقنيات التعلم العميق - بدقة 98<br>
             پشتگیریا فێربوونا کویرا نوی - برێژا ٪98
         </p>
-        <p>
+        <p style="font-size: 1.2em;">
             Upload an image or select from examples below<br>
             ارفع صورة أو اختر من النماذج<br>
             وێنەکی دابگرە یان نموونەکی بهەڵبژێرە
         </p>
-        <hr style="margin: 30px auto; width: 80%;">
+        <hr style="margin: 30px auto; width: 80%; border: 1px solid #ddd;">
     </div>
     """)
     
