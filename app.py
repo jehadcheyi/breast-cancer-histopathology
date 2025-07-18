@@ -329,26 +329,26 @@ with gr.Blocks(
     """
 ) as demo:
     gr.Markdown("""
-    <div class="center-content">
-        <h1 style='margin-bottom: 10px;'>BREAST AI PRO</h1>
-        <h2 style='margin-top: 0;'>
-            Great AI Application for Breast Cancer Detection<br>
-            أحدث نظام ذكاء اصطناعي لكشف سرطان الثدي<br>
-            نویترین پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان
-        </h2>
-        <p style='font-size: 16px;'>
-            Powered by Revolutionary Deep Learning • 98% Accuracy<br>
-            ٪مدعوم بأحدث تقنيات التعلم العميق - بدقة 98<br>
-            پشتگیریا فێربوونا کویرا نوی - برێژا ٪98
-        </p>
-        <p style='font-size: 16px;'>
-            Upload an image or select from examples below<br>
-            ارفع صورة أو اختر من النماذج<br>
-            وێنەکی دابگرە یان نموونەکی بهەڵبژێرە
-        </p>
-        <hr style="margin: 30px auto; width: 80%;">
-    </div>
-    """)
+<div style="text-align: center; width: 100%; margin: 0 auto;">
+    <h1 style='margin-bottom: 10px;'>BREAST AI PRO</h1>
+    <h2 style='margin-top: 0;'>
+        Great AI Application for Breast Cancer Detection<br>
+        أحدث نظام ذكاء اصطناعي لكشف سرطان الثدي<br>
+        نویترین پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان
+    </h2>
+    <p style='font-size: 16px;'>
+        Powered by Revolutionary Deep Learning • 98% Accuracy<br>
+        ٪مدعوم بأحدث تقنيات التعلم العميق - بدقة 98<br>
+        پشتگیریا فێربوونا کویرا نوی - برێژا ٪98
+    </p>
+    <p style='font-size: 16px;'>
+        Upload an image or select from examples below<br>
+        ارفع صورة أو اختر من النماذج<br>
+        وێنەکی دابگرە یان نموونەکی بهەڵبژێرە
+    </p>
+    <hr style="margin: 30px auto; width: 80%;">
+</div>
+""")
 
     with gr.Row():
         # Left Panel
