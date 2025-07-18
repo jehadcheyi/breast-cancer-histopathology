@@ -322,7 +322,7 @@ with gr.Blocks(title="BREAST AI - Advanced Cancer Detection", theme="soft") as d
     <div style='background: linear-gradient(135deg, #6e48aa 0%, #9d50bb 100%); padding: 20px; border-radius: 10px; color: white;'>
     <h1 style='text-align: center; margin-bottom: 10px;'>BREAST AI PRO</h1>
     <h2 style='text-align: center; margin-top: 0;'>World's Most Advanced AI for Breast Cancer Detection</h2>
-    <p style='text-align: center; font-size: 16px;'>Powered by Jehad Cheyi's Revolutionary Deep Learning Architecture • 98.7% Validation Accuracy</p>
+    <p style='text-align: center; font-size: 16px;'>Powered by Revolutionary Deep Learning Architecture • 98.7% Validation Accuracy</p>
     </div>
     """)
 
@@ -371,18 +371,33 @@ with gr.Blocks(title="BREAST AI - Advanced Cancer Detection", theme="soft") as d
 
         # Right Panel - Results
         with gr.Column(scale=2):
-            # Diagnostic Report
-            with gr.Tab("📝 AI Diagnostic Report"):
-                diagnosis_output = gr.HTML("""
-                <div style='text-align: center; padding: 40px; background: #f9f9f9; border-radius: 8px;'>
-                <h3>Awaiting Analysis</h3>
-                <p>Upload a histopathology image to receive our AI's assessment</p>
-                </div>
-                """)
-
-            # Visualization
-            with gr.Tab("🌡️ Heatmap Analysis"):
-                plot_output = gr.Plot()
+            # Combined Diagnostic Report and Heatmap
+            with gr.Tab("📊 AI Diagnostic Report"):
+                with gr.Column():
+                    # Diagnostic Text Output
+                    diagnosis_output = gr.HTML("""
+                    <div style='text-align: center; padding: 20px; background: #f9f9f9; border-radius: 8px; margin-bottom: 20px;'>
+                    <h3 style='margin-top: 0;'>Awaiting Analysis</h3>
+                    <p>Upload a histopathology image to receive our AI's comprehensive assessment</p>
+                    </div>
+                    """)
+                    
+                    # Heatmap Visualization
+                    gr.Markdown("### 🌡️ Tissue Analysis Heatmap")
+                    plot_output = gr.Plot()
+                    
+                    # Heatmap Legend
+                    gr.Markdown("""
+                    <div style='background: #f5f5f5; padding: 10px; border-radius: 8px;'>
+                    <h4 style='margin-top: 0;'>Heatmap Legend:</h4>
+                    <div style='display: flex; flex-wrap: wrap; gap: 15px;'>
+                        <div><span style='display: inline-block; width: 15px; height: 15px; background: #ff0000;'></span> High malignancy (90-100%)</div>
+                        <div><span style='display: inline-block; width: 15px; height: 15px; background: #ff6600;'></span> Moderate (70-90%)</div>
+                        <div><span style='display: inline-block; width: 15px; height: 15px; background: #ffcc00;'></span> Suspicious (50-70%)</div>
+                        <div><span style='display: inline-block; width: 15px; height: 15px; background: #00cc00;'></span> Normal tissue</div>
+                    </div>
+                    </div>
+                    """)
 
     # Footer
     gr.Markdown("""
