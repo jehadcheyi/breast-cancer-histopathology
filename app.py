@@ -321,10 +321,10 @@ with gr.Blocks(title="BREAST AI - Advanced Cancer Detection", theme="soft") as d
     # Hero Section
     gr.Markdown("""
     <div style='background: linear-gradient(135deg, #6e48aa 0%, #9d50bb 100%); padding: 20px; border-radius: 10px; color: white;'>
-    <h1 style='text-align: center; margin-bottom: 10px;'>BREAST AI PRO | بریست ئای ئای</h1>
-    <h2 style='text-align: center; margin-top: 0;'>The World's Leading AI for Breast Cancer Detection<br>أقوى نظام ذكاء اصطناعي لكشف سرطان الثدي<br>ئەزموونی زانستی سەقامگیر بۆ دۆزینەوەی شێرپەنجەی مێ</h2>
-    <p style='text-align: center; font-size: 16px;'>Powered by Revolutionary Deep Learning • 98% Accuracy<br>مدعوم بأحدث تقنيات التعلم العميق - بدقة ٩٨٪<br>پشتگیری لە فێربوونی قووڵی نوێ - ڕاستییەکی ٩٨٪</p>
-    <p style='text-align: center; font-size: 16px;'>Upload an image or select from examples below<br>ارفع صورة أو اختر من النماذج<br>وێنەکە باربکە یان نموونە هەڵبژێرە</p>
+    <h1 style='text-align: center; margin-bottom: 10px;'>BREAST AI PRO </h1>
+    <h2 style='text-align: center; margin-top: 0;'>Great AI Application for Breast Cancer Detection<br>أحدث نظام ذكاء اصطناعي لكشف سرطان الثدي<br> نویترین پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان </h2>
+    <p style='text-align: center; font-size: 16px;'>Powered by Revolutionary Deep Learning • 98% Accuracy<br>٪مدعوم بأحدث تقنيات التعلم العميق - بدقة 98 <br>پشتگیریا فێربوونا کویرا نوی - برێژا ٪98</p>
+    <p style='text-align: center; font-size: 16px;'>Upload an image or select from examples below<br>ارفع صورة أو اختر من النماذج<br>وێنەکی دابگرە یان نموونەکی بهەڵبژێرە</p>
     </div>
     """)
 
@@ -334,28 +334,26 @@ with gr.Blocks(title="BREAST AI - Advanced Cancer Detection", theme="soft") as d
             # Upload Section
             with gr.Group():
                 gr.Markdown("""
-                ## 🔬 AI-Powered Histopathology Analysis | تحلیل نسيجي مدعوم بالذكاء الاصطناعي | ڕاوێژکردنی تووشبوونی نسێجی بە یارمەتیدانی AI
+                ## 🔬 AI-Powered Histopathology Analysis
                 Discover malignant and benign patterns with unmatched precision:<br>
                 🔹 Detects breast cancer subtypes automatically<br>
                 🔹 10x faster than traditional pathology review<br>
-                🔹 سهولة الاستخدام ودقة مذهلة<br>
-                🔹 سەیرەکی خێرا و دروستکارییەکی زۆر
                 """)
 
-                image_input = gr.Image(type="numpy", label="Upload Histopathology Image | حمّل صورة الأنسجة | وێنەی نسێج باربکە")
+                image_input = gr.Image(type="numpy", label="Upload Histopathology Image | حمّل صورة الأنسجة ")
                 gr.Markdown("""
-                <small>Supported Formats: jpg, jpeg, png, tif<br>الصيغ المدعومة: jpg، jpeg، png، tif<br>فۆرماتە پشتیوانکراوەکان: jpg، jpeg، png، tif</small>
+                <small>Supported Formats: jpg, jpeg, png, tif</small>
                 """)
 
                 with gr.Row():
-                    submit_btn = gr.Button("🔍 Analyze Now | حلل الآن | هەڵسەنگاندن بکە", variant="primary", scale=2)
-                    clear_btn = gr.Button("🧹 Clear | امسح | سڕینەوە", variant="secondary", scale=1)
+                    submit_btn = gr.Button("🔍 Analyze Now | حلل الآن ", variant="primary", scale=2)
+                    clear_btn = gr.Button("🧹 Clear  ", variant="secondary", scale=1)
 
             # Sample Gallery
             if sample_images:
                 with gr.Group():
                     gr.Markdown("""
-                    ## 📚 Example Images | صور توضيحية | نموونە وێنەکان
+                    ## 📚 Example Images 
                     """)
 
                     gallery_items = [(img, f"Sample {i+1}") for i, img in enumerate(sample_images)] if not isinstance(sample_images[0], (list, tuple)) else [(img, name) for img, name in sample_images]
@@ -376,26 +374,26 @@ with gr.Blocks(title="BREAST AI - Advanced Cancer Detection", theme="soft") as d
         # Right Panel - Results
         with gr.Column(scale=2):
             # Combined Diagnostic Report and Heatmap
-            with gr.Tab("📊 AI Diagnostic Report | التقرير التشخيصي | راپۆرتی تاقیکردنەوە"):
+            with gr.Tab("📊 AI Diagnostic Report "):
                 with gr.Column():
                     diagnosis_output = gr.HTML("""
                     <div style='text-align: center; padding: 20px; background: #f9f9f9; border-radius: 8px; margin-bottom: 20px;'>
-                    <h3 style='margin-top: 0;'>Awaiting Analysis... | بانتظار التحليل... | چاوەڕوانی هەڵسەنگاندنە...</h3>
-                    <p>Upload a histopathology image to receive an AI-based diagnostic report.<br>قم بتحميل صورة لفحص الأنسجة للحصول على تقرير تشخيصي ذكي<br>وێنەی نسێج باربکە بۆ وەرگرتنی راپۆرتێکی زانستی بەکارھێنانی AI</p>
+                    <h3 style='margin-top: 0;'>Awaiting Analysis.....</h3>
+                    <p>Upload a histopathology image to receive an AI-based diagnostic report</p>
                     </div>
                     """)
 
-                    gr.Markdown("### 🌡️ Tissue Analysis Heatmap | خريطة حرارية لفحص الأنسجة | خەریطەی گەرمی بۆ نسێجەکان")
+                    gr.Markdown("### 🌡️ Tissue Analysis Heatmap ")
                     plot_output = gr.Plot()
 
                     gr.Markdown("""
                     <div style='background: #f5f5f5; padding: 10px; border-radius: 8px;'>
-                    <h4 style='margin-top: 0;'>Heatmap Legend | دليل الألوان | ڕێنیشانی ڕەنگەکان:</h4>
+                    <h4 style='margin-top: 0;'>Heatmap Legend :</h4>
                     <div style='display: flex; flex-wrap: wrap; gap: 15px;'>
-                        <div><span style='display: inline-block; width: 15px; height: 15px; background: #ff0000;'></span> High Malignancy (90-100%) | شدة عالية | زۆر خراپە (٩٠-١٠٠٪)</div>
-                        <div><span style='display: inline-block; width: 15px; height: 15px; background: #ff6600;'></span> Moderate (70-90%) | معتدل | نێوانی (٧٠-٩٠٪)</div>
-                        <div><span style='display: inline-block; width: 15px; height: 15px; background: #ffcc00;'></span> Suspicious (50-70%) | مشكوك فيه | گومان لەسەر (٥٠-٧٠٪)</div>
-                        <div><span style='display: inline-block; width: 15px; height: 15px; background: #00cc00;'></span> Normal Tissue | نسيج طبيعي | نسێجی ئاسایی</div>
+                        <div><span style='display: inline-block; width: 15px; height: 15px; background: #ff0000;'></span> High Malignancy (90-100%) </div>
+                        <div><span style='display: inline-block; width: 15px; height: 15px; background: #ff6600;'></span> Moderate (70-90%) </div>
+                        <div><span style='display: inline-block; width: 15px; height: 15px; background: #ffcc00;'></span> Suspicious (50-70%) </div>
+                        <div><span style='display: inline-block; width: 15px; height: 15px; background: #00cc00;'></span> Normal Tissue </div>
                     </div>
                     </div>
                     """)
@@ -403,7 +401,7 @@ with gr.Blocks(title="BREAST AI - Advanced Cancer Detection", theme="soft") as d
     # Footer
     gr.Markdown("""
     <div style='text-align: center; margin-top: 20px; font-size: 12px;'>
-    <p>© 2025 BREAST AI Technologies | Research Use Only<br>© ٢٠٢٥ تقنيات بريست أي آي | للاستخدام البحثي فقط<br>© ٢٠٢٥ تێکنەلۆجیای BREAST AI | تەنیا بۆ توێژینەوە</p>
+    <p>© 2025 BREAST AI Technologies | Research Use Only<br>© </p>
     </div>
     """)
 
