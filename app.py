@@ -317,44 +317,62 @@ with gr.Blocks(
     title="BREAST AI - Advanced Cancer Detection",
     theme="soft",
     css="""
-    .centered-container {
+    .header-container {
         display: flex !important;
         justify-content: center !important;
         align-items: center !important;
-        flex-direction: column !important;
+        gap: 40px !important;
         width: 100% !important;
-        text-align: center !important;
         margin: 0 auto !important;
         padding: 20px !important;
     }
-    .centered-container * {
-        max-width: 100% !important;
-        margin: 5px 0 !important;
+    .text-content {
+        text-align: center !important;
+        flex: 1 !important;
+        max-width: 800px !important;
+    }
+    .icon-container {
+        flex-shrink: 0 !important;
+    }
+    .icon-container img {
+        width: 150px !important;
+        height: 150px !important;
+        object-fit: contain !important;
+    }
+    @media (max-width: 768px) {
+        .header-container {
+            flex-direction: column !important;
+            gap: 20px !important;
+        }
     }
     """
 ) as demo:
     gr.Markdown("""
-    <div class="centered-container">
-        <h1 style="font-size: 2.5em;">BREAST AI PRO</h1>
-        <h2 style="font-size: 1.5em;">
-            Great AI Application for Breast Cancer Detection<br>
-            أحدث نظام ذكاء اصطناعي لكشف سرطان الثدي<br>
-            نویترین پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان
-        </h2>
-        <p style="font-size: 1.2em;">
-            Powered by Revolutionary Deep Learning • 98% Accuracy<br>
-            ٪مدعوم بأحدث تقنيات التعلم العميق - بدقة 98<br>
-            پشتگیریا فێربوونا کویرا نوی - برێژا ٪98
-        </p>
-        <p style="font-size: 1.2em;">
-            Upload an image or select from examples below<br>
-            ارفع صورة أو اختر من النماذج<br>
-            وێنەکی دابگرە یان نموونەکی بهەڵبژێرە
-        </p>
-        <hr style="margin: 30px auto; width: 80%; border: 1px solid #ddd;">
+    <div class="header-container">
+        <div class="text-content">
+            <h1 style="font-size: 2.5em; margin-bottom: 15px;">BREAST AI PRO</h1>
+            <h2 style="font-size: 1.5em; margin-bottom: 15px;">
+                Great AI Application for Breast Cancer Detection<br>
+                أحدث نظام ذكاء اصطناعي لكشف سرطان الثدي<br>
+                نویترین پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان
+            </h2>
+            <p style="font-size: 1.2em; margin-bottom: 15px;">
+                Powered by Revolutionary Deep Learning • 98% Accuracy<br>
+                ٪مدعوم بأحدث تقنيات التعلم العميق - بدقة 98<br>
+                پشتگیریا فێربوونا کویرا نوی - برێژا ٪98
+            </p>
+            <p style="font-size: 1.2em;">
+                Upload an image or select from examples below<br>
+                ارفع صورة أو اختر من النماذج<br>
+                وێنەکی دابگرە یان نموونەکی بهەڵبژێرە
+            </p>
+        </div>
+        <div class="icon-container">
+            <img src="https://raw.githubusercontent.com/gradio-app/gradio/main/website/assets/img/logo.svg" alt="AI Icon">
+        </div>
     </div>
+    <hr style="margin: 30px auto; width: 80%; border: 1px solid #ddd;">
     """)
-    
 
     with gr.Row():
         # Left Panel
