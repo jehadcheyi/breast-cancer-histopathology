@@ -313,74 +313,66 @@ def create_visualization(img, pred_idx, binary_conf, label, subtype_conf, zooms=
     plt.subplots_adjust(top=0.88)
     return fig
 
+
 with gr.Blocks(
     title="BREAST AI - Advanced Cancer Detection",
     theme="soft",
     css="""
     .header-container {
         display: flex !important;
-        justify-content: space-between !important;
+        justify-content: center !important;
         align-items: center !important;
         gap: 40px !important;
-        width: 90% !important;
+        width: 100% !important;
         margin: 0 auto !important;
         padding: 20px !important;
         background: #f8f9fa !important;
-        border-radius: 15px !important;
-    }
-    .text-content {
-        text-align: center !important;
-        flex: 1 !important;
-    }
-    .icon-container {
-        flex-shrink: 0 !important;
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
+        border: 2px dashed red !important; /* Debug border */
     }
     .icon-container img {
         width: 180px !important;
         height: 180px !important;
-        object-fit: contain !important;
-        border-radius: 10px !important;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
-    }
-    @media (max-width: 768px) {
-        .header-container { flex-direction: column !important; }
-        .icon-container img { width: 120px !important; height: 120px !important; }
+        border: 2px solid blue !important; /* Debug border */
     }
     """
 ) as demo:
-    # Get absolute path to your image
-    import os
-    image_path = os.path.abspath("breast.jpg")
+    # Method 1: Direct file reference (works in Gradio)
+    icon_html = """
+    <div class="icon-container">
+        <img src='breast.jpg' alt='Breast Cancer Icon' 
+        onerror="this.onerror=null; this.style.display='none'; console.log('Image failed to load')">
+    </div>
+    """
     
+    # Method 2: Base64 encoded fallback
+    try:
+        import base64
+        with open("breast.jpg", "rb") as img_file:
+            b64_string = base64.b64encode(img_file.read()).decode("utf-8")
+        icon_html = f"""
+        <div class="icon-container">
+            <img src='data:image/jpeg;base64,{b64_string}' alt='Breast Cancer Icon'>
+        </div>
+        """
+    except Exception as e:
+        print(f"Image loading error: {e}")
+        icon_html = """
+        <div class="icon-container" style="font-size: 100px;">
+            ⚕️ <!-- Fallback emoji -->
+        </div>
+        """
+
     gr.Markdown(f"""
     <div class="header-container">
         <div class="text-content">
-            <h1 style="font-size: 2.5em; margin-bottom: 15px;">BREAST AI PRO</h1>
-            <h2 style="font-size: 1.5em; margin-bottom: 15px;">
-                Great AI Application for Breast Cancer Detection<br>
-                أحدث نظام ذكاء اصطناعي لكشف سرطان الثدي<br>
-                نویترین پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان
-            </h2>
-            <p style="font-size: 1.2em; margin-bottom: 15px;">
-                Powered by Revolutionary Deep Learning • 98% Accuracy<br>
-                ٪مدعوم بأحدث تقنيات التعلم العميق - بدقة 98<br>
-                پشتگیریا فێربوونا کویرا نوی - برێژا ٪98
-            </p>
-            <p style="font-size: 1.2em;">
-                Upload an image or select from examples below<br>
-                ارفع صورة أو اختر من النماذج<br>
-                وێنەکی دابگرە یان نموونەکی بهەڵبژێرە
-            </p>
+            <!-- Your existing text content -->
+            <h1>BREAST AI PRO</h1>
+            <!-- ... rest of your multilingual text ... -->
         </div>
-        <div class="icon-container">
-            <img src="/file={image_path}" alt="Breast Cancer Awareness Icon">
-        </div>
+        {icon_html}
     </div>
-    <hr style="margin: 30px auto; width: 80%; border: 1px solid #ddd;">
     """)
+    
 
     with gr.Row():
         # Left Panel
