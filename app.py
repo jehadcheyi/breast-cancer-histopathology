@@ -319,35 +319,43 @@ with gr.Blocks(
     css="""
     .header-container {
         display: flex !important;
-        justify-content: center !important;
+        justify-content: space-between !important;
         align-items: center !important;
         gap: 40px !important;
-        width: 100% !important;
+        width: 90% !important;
         margin: 0 auto !important;
         padding: 20px !important;
+        background: #f8f9fa !important;
+        border-radius: 15px !important;
     }
     .text-content {
         text-align: center !important;
         flex: 1 !important;
-        max-width: 800px !important;
     }
     .icon-container {
         flex-shrink: 0 !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
     }
     .icon-container img {
-        width: 150px !important;
-        height: 150px !important;
+        width: 180px !important;
+        height: 180px !important;
         object-fit: contain !important;
+        border-radius: 10px !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
     }
     @media (max-width: 768px) {
-        .header-container {
-            flex-direction: column !important;
-            gap: 20px !important;
-        }
+        .header-container { flex-direction: column !important; }
+        .icon-container img { width: 120px !important; height: 120px !important; }
     }
     """
 ) as demo:
-    gr.Markdown("""
+    # Get absolute path to your image
+    import os
+    image_path = os.path.abspath("breast.jpg")
+    
+    gr.Markdown(f"""
     <div class="header-container">
         <div class="text-content">
             <h1 style="font-size: 2.5em; margin-bottom: 15px;">BREAST AI PRO</h1>
@@ -368,7 +376,7 @@ with gr.Blocks(
             </p>
         </div>
         <div class="icon-container">
-            <img src="https://raw.githubusercontent.com/gradio-app/gradio/main/website/assets/img/logo.svg" alt="AI Icon">
+            <img src="/file={image_path}" alt="Breast Cancer Awareness Icon">
         </div>
     </div>
     <hr style="margin: 30px auto; width: 80%; border: 1px solid #ddd;">
