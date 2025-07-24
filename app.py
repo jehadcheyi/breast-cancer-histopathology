@@ -11,29 +11,40 @@ import gradio as gr
 from huggingface_hub import hf_hub_download
 import os
 
-# Hugging Face Hub repository details
-REPO_ID = "jehadcheyi/bc_models"  # Your private repo
+from huggingface_hub import hf_hub_download
+import os
+
+# 1. Define your model mapping (same structure as before)
 model_paths = {
     'binary': 'binary.h5',
-    'benign': 'benign.h5',
+    'benign': 'benign.h5', 
     'malignant': 'malignant.h5'
 }
 
-# Download models (will cache locally after first download)
-print("Downloading models from Hugging Face Hub...")
-try:
-    models = {}
-    for name, filename in MODEL_FILES.items():
-        model_path = hf_hub_download(
+# 2. Hugging Face Hub configuration
+REPO_ID = "jehadcheyi/bc_models"
+HF_TOKEN = os.getenv("jehad")  # Load from environment variable
+
+# 3. Modified model loading
+print("Loading models...")
+models = {}
+for name, filename in model_paths.items():
+    try:
+        # Download from Hub (or load from cache)
+        local_path = hf_hub_download(
             repo_id=REPO_ID,
             filename=filename,
-            token=os.getenv("jehad"),  # Optional: Load token from env
-            cache_dir="hf_cache"  # Optional: Custom cache directory
+            token=HF_TOKEN,
+            cache_dir="model_cache"
         )
-        models[name] = load_model(model_path)
-        print(f"✅ Loaded {name} model from Hugging Face Hub")
-except Exception as e:
-    raise RuntimeError(f"Failed to load models: {e}")
+        
+        # Load model using your original logic
+        models[name] = load_model(local_path)
+        print(f"✅ Loaded {name} model")
+        
+    except Exception as e:
+        print(f"❌ Failed to load {name} model: {str(e)}")
+        raise
 
 # Now models['binary'], models['benign'], models['malignant'] are your loaded models
 
