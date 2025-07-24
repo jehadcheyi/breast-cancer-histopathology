@@ -199,6 +199,7 @@ def analyze_image(input_img):
         return error_html, None
 
 # ========== GRADIO APP SETUP ==========
+
 with gr.Blocks(
     title="BREAST AI - Advanced Cancer Detection",
     theme="soft",
@@ -237,9 +238,84 @@ with gr.Blocks(
     }
     """
 ) as demo:
-    # [Rest of your Gradio interface code as you originally had it]
-    # ... include all your existing interface code here ...
+    
+    # Header Section
+    with gr.Row():
+        with gr.Column():
+            gr.Markdown("""
+            <div class="header-container">
+                <div class="icon-container">
+                    <img src="https://example.com/breast-cancer-icon.jpg" alt="Breast Cancer Awareness Icon">
+                </div>
+                <div class="text-content">
+                    <h1 style="margin-bottom: 15px;">BREAST AI PRO</h1>
+                    <h2 style="margin-bottom: 15px;">
+                        Advanced AI Application for Breast Cancer Detection<br>
+                        أحدث نظام ذكاء اصطناعي لكشف سرطان الثدي
+                    </h2>
+                    <p style="margin-bottom: 15px;">
+                        Powered by Deep Learning • 98% Accuracy<br>
+                        مدعوم بأحدث تقنيات التعلم العميق - بدقة 98%
+                    </p>
+                </div>
+            </div>
+            """)
 
-# Launch the app
+    # Main Content
+    with gr.Row():
+        # Input Column
+        with gr.Column(scale=1):
+            with gr.Group():
+                gr.Markdown("## 🔬 Upload Histopathology Image")
+                image_input = gr.Image(type="numpy", label="Select or upload tissue image")
+                
+                with gr.Row():
+                    submit_btn = gr.Button("Analyze", variant="primary")
+                    clear_btn = gr.Button("Clear", variant="secondary")
+
+            # Example Gallery
+            if sample_images:
+                with gr.Group():
+                    gr.Markdown("## 📚 Example Images")
+                    gallery = gr.Gallery(
+                        value=[(img, f"Sample {i+1}") for i, img in enumerate(sample_images)],
+                        columns=3,
+                        height="auto"
+                    )
+                    gallery.select(lambda evt: sample_images[evt.index], None, image_input)
+
+        # Output Column
+        with gr.Column(scale=2):
+            with gr.Tab("Diagnostic Report"):
+                diagnosis_output = gr.HTML("""
+                <div class="diagnosis-box">
+                    <h3>Awaiting Analysis...</h3>
+                    <p>Upload a histopathology image to begin diagnosis</p>
+                </div>
+                """)
+                
+                gr.Markdown("## 🌡️ Tissue Analysis Visualization")
+                plot_output = gr.Plot()
+
+    # Footer
+    gr.Markdown("""
+    <div style='text-align: center; margin-top: 20px;'>
+    <p>© 2025 BREAST AI Technologies | For Research Use Only</p>
+    </div>
+    """)
+
+    # Event Handling
+    submit_btn.click(
+        fn=analyze_image,
+        inputs=image_input,
+        outputs=[diagnosis_output, plot_output]
+    )
+
+    clear_btn.click(
+        fn=lambda: [None, None, None],
+        outputs=[image_input, diagnosis_output, plot_output]
+    )
+
+# This should be at the very end, outside the with block
 if __name__ == "__main__":
     demo.launch(share=True)
