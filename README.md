@@ -1,3 +1,15 @@
+---
+title: Breast AI PRO - Histopathology Classifier
+emoji: 🧠
+colorFrom: pink
+colorTo: red
+sdk: gradio
+sdk_version: "4.20.0"
+app_file: app.py
+pinned: true
+---
+
+
 # 🧠 BREAST AI PRO - Deep Learning System for Breast Cancer Detection
 
 ## 🔍 Overview
