@@ -24,7 +24,7 @@ for name, filename in model_files.items():
         model_path = hf_hub_download(
             repo_id="jehadcheyi/bc_models",
             filename=filename,
-            token=os.environ["HF_TOKEN"]
+            token=os.environ["jehad"]
         )
         models[name] = load_model(model_path)
         print(f"{name} model loaded ✅")
