@@ -8,12 +8,41 @@ from tensorflow.keras.models import load_model, Model
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import gradio as gr
 
-# Load Models
+from huggingface_hub import hf_hub_download
+from tensorflow.keras.models import load_model as keras_load_model
+import os
+
+# Hugging Face Hub configuration
+REPO_ID = "jehadcheyi/bc_models"
+HF_TOKEN = os.getenv("HF_TOKEN")  # Make sure to set this environment variable
+
 model_paths = {
-    'binary': 'BC/binary.h5',
-    'benign': 'BC/benign93.h5',
-    'malignant': 'BC/malignant.h5'
+    'binary': 'binary.h5',
+    'benign': 'benign.h5', 
+    'malignant': 'malignant.h5'
 }
+
+# Load models
+print("Loading models...")
+models = {}
+for name, filename in model_paths.items():
+    try:
+        # Download from Hub (or load from cache)
+        local_path = hf_hub_download(
+            repo_id=REPO_ID,
+            filename=filename,
+            token=HF_TOKEN,
+            cache_dir="model_cache"
+        )
+        
+        # Load model using Keras
+        models[name] = keras_load_model(local_path)
+        print(f"✅ Loaded {name} model")
+        
+    except Exception as e:
+        print(f"❌ Failed to load {name} model: {str(e)}")
+        raise
+
 
 img_size = (128, 128)
 target_size = (500, 500)
