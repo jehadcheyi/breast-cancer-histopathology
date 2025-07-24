@@ -13,7 +13,7 @@ import os
 
 # Hugging Face Hub repository details
 REPO_ID = "jehadcheyi/bc_models"  # Your private repo
-MODEL_FILES = {
+model_paths = {
     'binary': 'binary.h5',
     'benign': 'benign.h5',
     'malignant': 'malignant.h5'
