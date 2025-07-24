@@ -4,29 +4,33 @@ import cv2
 import matplotlib.pyplot as plt
 from PIL import Image
 import tensorflow as tf
-from tensorflow.keras.models import load_model, Model
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import gradio as gr
 
 from huggingface_hub import hf_hub_download
+from tensorflow.keras.models import load_model
 
-model_paths = {
+
+model_files = {
     'binary': 'binary.h5',
     'benign': 'benign.h5',
     'malignant': 'malignant.h5'
 }
 
 models = {}
-for name, filename in model_paths.items():
+
+for name, filename in model_files.items():
     try:
-        model_file = hf_hub_download(
-            repo_id="jehadcheyi/bc_models", 
+        model_path = hf_hub_download(
+            repo_id="jehadcheyi/bc_models",
             filename=filename,
-            token=os.environ["jehad"]
+            token=os.environ["HF_TOKEN"]
         )
-        models[name] = load_model(model_file)
+        models[name] = load_model(model_path)
+        print(f"{name} model loaded ✅")
     except Exception as e:
-        print(f"Error loading model {name}: {e}")
+        print(f"❌ Error loading {name}: {e}")
+
 
 
 img_size = (128, 128)
