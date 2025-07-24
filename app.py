@@ -10,9 +10,9 @@ import gradio as gr
 
 # Load Models
 model_paths = {
-    'binary': 'BC/binary.h5',
-    'benign': 'BC/benign93.h5',
-    'malignant': 'BC/malignant.h5'
+    'binary': 'jehadcheyi/models/binary.h5',
+    'benign': 'jehadcheyi/models/benign.h5',
+    'malignant': 'jehadcheyi/models/malignant.h5'
 }
 
 img_size = (128, 128)
