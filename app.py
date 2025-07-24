@@ -8,12 +8,26 @@ from tensorflow.keras.models import load_model, Model
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import gradio as gr
 
-# Load Models
+from huggingface_hub import hf_hub_download
+
 model_paths = {
-    'binary': 'BC/binary.h5',
-    'benign': 'BC/benign93.h5',
-    'malignant': 'BC/malignant.h5'
+    'binary': 'binary.h5',
+    'benign': 'benign.h5',
+    'malignant': 'malignant.h5'
 }
+
+models = {}
+for name, filename in model_paths.items():
+    try:
+        model_file = hf_hub_download(
+            repo_id="jehadcheyi/bc_models", 
+            filename=filename,
+            token=os.environ["jehad"]
+        )
+        models[name] = load_model(model_file)
+    except Exception as e:
+        print(f"Error loading model {name}: {e}")
+
 
 img_size = (128, 128)
 target_size = (500, 500)
