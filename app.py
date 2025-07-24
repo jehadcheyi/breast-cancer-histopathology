@@ -5,14 +5,14 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
-from tensorflow.keras.models import load_model, Model  # Important addition
+from tensorflow.keras.models import load_model, Model
 import gradio as gr
 from huggingface_hub import hf_hub_download
 
-# ========== MODEL LOADING SECTION ==========
+# ========== MODEL LOADING ==========
 model_paths = {
     'binary': 'binary.h5',
-    'benign': 'benign93.h5',
+    'benign': 'benign.h5', 
     'malignant': 'malignant.h5'
 }
 
@@ -24,15 +24,16 @@ for name, filename in model_paths.items():
         model_path = hf_hub_download(
             repo_id="jehadcheyi/bc_models",
             filename=filename,
-            token=os.environ["jehad"]
+            token=os.environ["jehas"]
         )
         models[name] = load_model(model_path)
         print(f"{name} model loaded ✅")
     except Exception as e:
         print(f"❌ Error loading {name}: {e}")
+        models[name] = None  # Ensure the key exists even if model fails to load
 
-# Set up Grad-CAM model after loading
-if 'binary' in models:
+# Set up Grad-CAM
+if models.get('binary'):
     binary_model = models['binary']
     last_conv = None
     for layer in reversed(binary_model.layers):
@@ -41,12 +42,13 @@ if 'binary' in models:
             break
 
     grad_model = Model(inputs=binary_model.inputs,
-                     outputs=[binary_model.get_layer(last_conv).output, binary_model.output])
+                     outputs=[binary_model.get_layer(last_conv).output, 
+                             binary_model.output])
     print("Grad-CAM model ready!")
 else:
-    print("Warning: Binary model not available for Grad-CAM")
+    print("⚠️ Binary model not available for Grad-CAM")
 
-# ========== CONSTANTS AND CONFIG ==========
+# ========== CONFIGURATION ==========
 img_size = (128, 128)
 target_size = (500, 500)
 
@@ -54,11 +56,21 @@ classes = {
     'binary': ['benign', 'malignant'],
     'benign': ['A', 'F', 'PT', 'TA'],
     'malignant': ['DC', 'LC', 'MC', 'PC'],
-    'benign_names': {'A': 'Adenosis', 'F': 'Fibroadenoma', 'PT': 'Phyllodes Tumor', 'TA': 'Tubular Adenoma'},
-    'malignant_names': {'DC': 'Ductal Carcinoma', 'LC': 'Lobular Carcinoma', 'MC': 'Mucinous Carcinoma', 'PC': 'Papillary Carcinoma'}
+    'benign_names': {
+        'A': 'Adenosis', 
+        'F': 'Fibroadenoma', 
+        'PT': 'Phyllodes Tumor', 
+        'TA': 'Tubular Adenoma'
+    },
+    'malignant_names': {
+        'DC': 'Ductal Carcinoma', 
+        'LC': 'Lobular Carcinoma', 
+        'MC': 'Mucinous Carcinoma', 
+        'PC': 'Papillary Carcinoma'
+    }
 }
 
-# ========== IMAGE PROCESSING FUNCTIONS ==========
+# ========== IMAGE PROCESSING ==========
 def prep_img(img):
     img = Image.fromarray(img)
     img = img.resize(img_size)
@@ -68,13 +80,22 @@ def prep_img(img):
 def predict(img):
     try:
         arr = prep_img(img)
+        
+        # Binary Classification
+        if not models.get('binary'):
+            raise ValueError("Binary model not loaded")
+        
         binary_pred = models['binary'].predict(arr, verbose=0)
         pred_idx = np.argmax(binary_pred[0])
         binary_conf = 100 * np.max(binary_pred[0])
         label = classes['binary'][pred_idx]
 
+        # Subtype Classification
         subtype_probs = {}
         if label == 'benign':
+            if not models.get('benign'):
+                raise ValueError("Benign model not loaded")
+                
             subtype_pred = models['benign'].predict(arr, verbose=0)
             subtype_idx = np.argmax(subtype_pred[0])
             subtype_conf = 100 * np.max(subtype_pred[0])
@@ -84,6 +105,9 @@ def predict(img):
             for code, prob in zip(classes['benign'], subtype_pred[0]):
                 subtype_probs[classes['benign_names'][code]] = prob*100
         else:
+            if not models.get('malignant'):
+                raise ValueError("Malignant model not loaded")
+                
             subtype_pred = models['malignant'].predict(arr, verbose=0)
             subtype_idx = np.argmax(subtype_pred[0])
             subtype_conf = 100 * np.max(subtype_pred[0])
@@ -95,10 +119,10 @@ def predict(img):
 
         return pred_idx, binary_conf, subtype_name, subtype_conf, subtype_probs
     except Exception as e:
-        print(f"Error during prediction: {str(e)}")
+        print(f"Prediction error: {str(e)}")
         raise
 
-# ========== VISUALIZATION FUNCTIONS ==========
+# ========== VISUALIZATION ==========
 def make_heatmap(img, pred_idx):
     resized = cv2.resize(img, img_size)
     img_in = resized.astype(np.float32) / 255.0
@@ -117,7 +141,7 @@ def make_heatmap(img, pred_idx):
     heatmap = heatmap.numpy()
 
     heatmap = cv2.resize(heatmap, target_size)
-    return cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET)
+    return cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET
 
 def create_visualization(img, pred_idx):
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
@@ -145,22 +169,46 @@ def create_visualization(img, pred_idx):
     plt.tight_layout()
     return fig
 
+# ========== SAMPLE IMAGES ==========
+def get_sample_images():
+    sample_images = []
+    sample_folder = "examples"  # Create this folder with sample images
+    if os.path.exists(sample_folder):
+        for file in os.listdir(sample_folder):
+            if file.lower().endswith(('.png', '.jpg', '.jpeg', '.tif')):
+                try:
+                    img_path = os.path.join(sample_folder, file)
+                    img = cv2.imread(img_path)
+                    if img is not None:
+                        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                        sample_images.append(img)
+                except Exception as e:
+                    print(f"Error loading sample image {file}: {e}")
+    return sample_images
+
+sample_images = get_sample_images()
+
 # ========== GRADIO INTERFACE ==========
 def analyze_image(input_img):
     try:
+        if input_img is None:
+            raise ValueError("No image provided")
+            
         img = input_img.astype('uint8')
         pred_idx, binary_conf, subtype, subtype_conf, subtype_probs = predict(img)
 
-        diagnosis = classes['binary'][pred_idx].upper()
-        diagnosis_color = "#4CAF50" if diagnosis == "BENIGN" else "#F44336"
+        label = classes['binary'][pred_idx].upper()
+        diagnosis_color = "#4CAF50" if label == "BENIGN" else "#F44336"
 
-        subtype_table = """
-        <table style='width:100%; border-collapse: collapse; margin: 15px 0; font-family: Arial, sans-serif;'>
+        # Create diagnosis HTML
+        subtype_table = "<table style='width:100%; border-collapse: collapse; margin: 15px 0;'>"
+        subtype_table += """
             <tr style='background-color: #f2f2f2;'>
-                <th style='color: #0D47A1; padding: 8px; text-align: left;'>Subtype</th>
-                <th style='color: #0D47A1; padding: 8px; text-align: left;'>Confidence</th>
+                <th style='padding: 8px; text-align: left;'>Subtype</th>
+                <th style='padding: 8px; text-align: left;'>Confidence</th>
             </tr>
         """
+        
         for name, prob in subtype_probs.items():
             subtype_table += f"""
             <tr>
@@ -171,8 +219,8 @@ def analyze_image(input_img):
         subtype_table += "</table>"
 
         diagnosis_html = f"""
-        <div style="border: 2px solid {diagnosis_color}; border-radius: 8px; padding: 20px; margin: 20px 0; font-family: Arial, sans-serif;">
-            <h2 style="color: {diagnosis_color}; margin: 0;">Diagnosis: {diagnosis}</h2>
+        <div style="border: 2px solid {diagnosis_color}; border-radius: 8px; padding: 20px; margin: 20px 0;">
+            <h2 style="color: {diagnosis_color}; margin: 0;">Diagnosis: {label}</h2>
             <div style="background-color: {diagnosis_color}; color: white; padding: 5px 15px; border-radius: 20px; display: inline-block; margin: 10px 0;">
                 {binary_conf:.1f}% Confidence
             </div>
@@ -189,118 +237,96 @@ def analyze_image(input_img):
 
         fig = create_visualization(img, pred_idx)
         return diagnosis_html, fig
+
     except Exception as e:
         error_html = f"""
         <div style="border: 2px solid #FF5722; border-radius: 8px; padding: 20px; margin: 20px 0; background-color: #fff3e0;">
-            <h2 style="color: #FF5722; margin: 0;">Error Processing Image</h2>
+            <h2 style="color: #FF5722; margin: 0;">Error</h2>
             <p>{str(e)}</p>
         </div>
         """
         return error_html, None
 
-# ========== GRADIO APP SETUP ==========
-
+# ========== APP SETUP ==========
 with gr.Blocks(
     title="BREAST AI - Advanced Cancer Detection",
     theme="soft",
     css="""
     .header-container {
-        display: flex !important;
-        justify-content: space-between !important;
-        align-items: center !important;
-        gap: 40px !important;
-        width: 90% !important;
-        margin: 0 auto !important;
-        padding: 20px !important;
-        background: #f8f9fa !important;
-        border-radius: 15px !important;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 40px;
+        width: 90%;
+        margin: 0 auto;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 15px;
     }
-    .text-content {
-        text-align: center !important;
-        flex: 1 !important;
+    .diagnosis-box { 
+        margin: 20px 0; 
+        padding: 20px; 
+        border-radius: 8px; 
     }
-    .icon-container {
-        flex-shrink: 0 !important;
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
+    .benign { 
+        border: 2px solid #4CAF50; 
+        background-color: #e8f5e9; 
     }
-    .icon-container img {
-        width: 180px !important;
-        height: 180px !important;
-        object-fit: contain !important;
-        border-radius: 10px !important;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
-    }
-    @media (max-width: 768px) {
-        .header-container { flex-direction: column !important; }
-        .icon-container img { width: 120px !important; height: 120px !important; }
+    .malignant { 
+        border: 2px solid #F44336; 
+        background-color: #ffebee; 
     }
     """
 ) as demo:
     
-    # Header Section
+    # Header
     with gr.Row():
-        with gr.Column():
-            gr.Markdown("""
-            <div class="header-container">
-                <div class="icon-container">
-                    <img src="https://example.com/breast-cancer-icon.jpg" alt="Breast Cancer Awareness Icon">
-                </div>
-                <div class="text-content">
-                    <h1 style="margin-bottom: 15px;">BREAST AI PRO</h1>
-                    <h2 style="margin-bottom: 15px;">
-                        Advanced AI Application for Breast Cancer Detection<br>
-                        أحدث نظام ذكاء اصطناعي لكشف سرطان الثدي
-                    </h2>
-                    <p style="margin-bottom: 15px;">
-                        Powered by Deep Learning • 98% Accuracy<br>
-                        مدعوم بأحدث تقنيات التعلم العميق - بدقة 98%
-                    </p>
-                </div>
+        gr.Markdown("""
+        <div class="header-container">
+            <div style="text-align: center; flex: 1;">
+                <h1>BREAST AI PRO</h1>
+                <h3>Advanced Breast Cancer Detection System</h3>
             </div>
-            """)
+        </div>
+        """)
 
     # Main Content
     with gr.Row():
         # Input Column
         with gr.Column(scale=1):
             with gr.Group():
-                gr.Markdown("## 🔬 Upload Histopathology Image")
-                image_input = gr.Image(type="numpy", label="Select or upload tissue image")
+                gr.Markdown("## 🔬 Upload Image")
+                image_input = gr.Image(type="numpy", label="Histopathology Image")
                 
                 with gr.Row():
                     submit_btn = gr.Button("Analyze", variant="primary")
                     clear_btn = gr.Button("Clear", variant="secondary")
 
-            # Example Gallery
+            # Sample Gallery
             if sample_images:
                 with gr.Group():
-                    gr.Markdown("## 📚 Example Images")
+                    gr.Markdown("## 📚 Examples")
                     gallery = gr.Gallery(
                         value=[(img, f"Sample {i+1}") for i, img in enumerate(sample_images)],
                         columns=3,
                         height="auto"
                     )
-                    gallery.select(lambda evt: sample_images[evt.index], None, image_input)
+                    gallery.select(
+                        fn=lambda evt: sample_images[evt.index],
+                        outputs=image_input
+                    )
 
         # Output Column
         with gr.Column(scale=2):
             with gr.Tab("Diagnostic Report"):
-                diagnosis_output = gr.HTML("""
-                <div class="diagnosis-box">
-                    <h3>Awaiting Analysis...</h3>
-                    <p>Upload a histopathology image to begin diagnosis</p>
-                </div>
-                """)
-                
-                gr.Markdown("## 🌡️ Tissue Analysis Visualization")
+                diagnosis_output = gr.HTML()
+                gr.Markdown("## 🌡️ Visualization")
                 plot_output = gr.Plot()
 
     # Footer
     gr.Markdown("""
     <div style='text-align: center; margin-top: 20px;'>
-    <p>© 2025 BREAST AI Technologies | For Research Use Only</p>
+        <p>© 2025 BREAST AI | For research use only</p>
     </div>
     """)
 
@@ -312,10 +338,10 @@ with gr.Blocks(
     )
 
     clear_btn.click(
-        fn=lambda: [None, None, None],
-        outputs=[image_input, diagnosis_output, plot_output]
+        fn=lambda: [None, None],
+        outputs=[image_input, diagnosis_output]
     )
 
-# This should be at the very end, outside the with block
+# Launch
 if __name__ == "__main__":
     demo.launch(share=True)
