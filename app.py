@@ -141,7 +141,7 @@ def make_heatmap(img, pred_idx):
     heatmap = heatmap.numpy()
 
     heatmap = cv2.resize(heatmap, target_size)
-    return cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET
+    return cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET)
 
 def create_visualization(img, pred_idx):
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
