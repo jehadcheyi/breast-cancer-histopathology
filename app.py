@@ -8,46 +8,12 @@ from tensorflow.keras.models import load_model, Model
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import gradio as gr
 
-from huggingface_hub import hf_hub_download
-import os
-
-from huggingface_hub import hf_hub_download
-import os
-
-# 1. Define your model mapping (same structure as before)
+# Load Models
 model_paths = {
-    'binary': 'binary.h5',
-    'benign': 'benign.h5', 
-    'malignant': 'malignant.h5'
+    'binary': 'BC/binary.h5',
+    'benign': 'BC/benign93.h5',
+    'malignant': 'BC/malignant.h5'
 }
-
-# 2. Hugging Face Hub configuration
-REPO_ID = "jehadcheyi/bc_models"
-HF_TOKEN = os.getenv("jehad")  # Load from environment variable
-
-# 3. Modified model loading
-print("Loading models...")
-models = {}
-for name, filename in model_paths.items():
-    try:
-        # Download from Hub (or load from cache)
-        local_path = hf_hub_download(
-            repo_id=REPO_ID,
-            filename=filename,
-            token=HF_TOKEN,
-            cache_dir="model_cache"
-        )
-        
-        # Load model using your original logic
-        models[name] = load_model(local_path)
-        print(f"✅ Loaded {name} model")
-        
-    except Exception as e:
-        print(f"❌ Failed to load {name} model: {str(e)}")
-        raise
-
-# Now models['binary'], models['benign'], models['malignant'] are your loaded models
-
 
 img_size = (128, 128)
 target_size = (500, 500)
