@@ -7,41 +7,47 @@ import tensorflow as tf
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import gradio as gr
 
-from huggingface_hub import hf_hub_download
-from tensorflow.keras.models import load_model
-
-
-from huggingface_hub import hf_hub_download
-from tensorflow.keras.models import load_model
 import os
+import logging
+import traceback
+from huggingface_hub import hf_hub_download
+from tensorflow.keras.models import load_model
 
-# Define model filenames from Hugging Face private repo
-model_paths = {
-    'binary': 'binary.h5',
-    'benign': 'benign93.h5',
-    'malignant': 'malignant.h5'
-}
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-models = {}
+# Load HF token from environment
+HF_TOKEN = os.environ.get("jehad")
 
-# Load models from Hugging Face Hub
-for name, filename in model_paths.items():
-    try:
-        model_path = hf_hub_download(
-            repo_id="jehadcheyi/bc_models",
-            filename=filename,
-            token=os.environ["jehad"]
-        )
-        models[name] = load_model(model_path)
-        print(f"{name} model loaded ✅")
-    except Exception as e:
-        print(f"❌ Error loading {name}: {e}")
+if not HF_TOKEN:
+    logger.error("HF token not found in environment variable 'jehad'")
+    raise ValueError("Missing Hugging Face token")
 
-# Check if models loaded
-print("Checking model files...")
-for name, model in models.items():
-    if model is None:
-        raise FileNotFoundError(f"{name} model not loaded.")
+try:
+    # Load segmentation model
+    seg_model_path = hf_hub_download(
+        repo_id="jehadcheyi/bc_models",
+        filename="unet.h5",
+        token=HF_TOKEN
+    )
+    seg_model = load_model(seg_model_path)
+    logger.info("✅ Segmentation model loaded successfully")
+
+    # Load classification model
+    cls_model_path = hf_hub_download(
+        repo_id="jehadcheyi/bc_models",
+        filename="cnn96.h5",
+        token=HF_TOKEN
+    )
+    cls_model = load_model(cls_model_path)
+    logger.info("✅ Classification model loaded successfully")
+
+except Exception as e:
+    logger.error("❌ Error loading models: %s", str(e))
+    traceback.print_exc()
+    seg_model = None
+    cls_model = None
 
 
 
