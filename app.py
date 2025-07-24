@@ -8,12 +8,52 @@ from tensorflow.keras.models import load_model, Model
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import gradio as gr
 
-# Load Models
-model_paths = {
-    'binary': 'jehadcheyi/models/binary.h5',
-    'benign': 'jehadcheyi/models/benign.h5',
-    'malignant': 'jehadcheyi/models/malignant.h5'
+import os
+import logging
+from huggingface_hub import hf_hub_download
+from tensorflow.keras.models import load_model
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Make sure your HF token is set in environment variable, e.g.:
+# export HF_TOKEN="your_token_here"
+hf_token = os.environ.get("jehad")  # or whatever your env var name is
+
+if not hf_token:
+    raise ValueError("HF_TOKEN environment variable not found. Please set your Hugging Face token.")
+
+def download_and_load_model(repo_id, filename):
+    try:
+        logger.info(f"Downloading {filename} from repo {repo_id}...")
+        model_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            token=hf_token
+        )
+        logger.info(f"Loading model from {model_path}...")
+        model = load_model(model_path)
+        logger.info(f"Loaded model {filename} successfully.")
+        return model
+    except Exception as e:
+        logger.error(f"Error downloading/loading model {filename}: {e}")
+        logger.error(traceback.format_exc())
+        raise
+
+repo_id = "jehadcheyi/bc_models"
+model_filenames = {
+    'binary': "binary.h5",
+    'benign': "benign.h5",
+    'malignant': "malignant.h5"
 }
+
+models = {}
+for name, filename in model_filenames.items():
+    models[name] = download_and_load_model(repo_id, filename)
+
+# Now models['binary'], models['benign'], models['malignant'] are your loaded models
+
 
 img_size = (128, 128)
 target_size = (500, 500)
