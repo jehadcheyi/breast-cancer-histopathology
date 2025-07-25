@@ -381,7 +381,7 @@ with gr.Blocks(
         margin: 5px 0 !important;
     }
     """
-with gr.Blocks() as demo:
+) as demo:
     gr.Markdown("""
     <style>
     .background-container {
