@@ -386,19 +386,19 @@ with gr.Blocks(
     <div class="centered-container">
         <h1 style="font-size: 2.5em;">BREAST AI PRO</h1>
         <h2 style="font-size: 1.5em;">
-            Great AI Application for Breast Cancer Detection<br>
-            أحدث نظام ذكاء اصطناعي لكشف سرطان الثدي<br>
-            نویترین پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان
+            AI Application for Breast Cancer Detection<br>
+            نظام ذكاء اصطناعي لكشف سرطان الثدي<br>
+             پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان
         </h2>
         <p style="font-size: 1.2em;">
             Powered by Revolutionary Deep Learning • 98% Accuracy<br>
-            ٪مدعوم بأحدث تقنيات التعلم العميق - بدقة 98<br>
-            پشتگیریا فێربوونا کویرا نوی - برێژا ٪98
+            مدعوم بمودل خاص لتقنيات التعلم العميق - بدقة ٪98<br>
+            پشتگیریا مودلێ تایبەی ففێربوونا کویرا نوی - برێژا ٪98
         </p>
         <p style="font-size: 1.2em;">
-            Upload an image or select from examples below<br>
-            ارفع صورة أو اختر من النماذج<br>
-            وێنەکی دابگرە یان نموونەکی بهەڵبژێرە
+            Upload an image or select from examples below and click analyze<br>
+             ارفع صورة أو اختر من النماذج وحلل<br>
+            وێنەکی دابگرە یان نموونەکی بهەڵبژێرەو کلیک کە
         </p>
         <hr style="margin: 30px auto; width: 80%; border: 1px solid #ddd;">
     </div>
