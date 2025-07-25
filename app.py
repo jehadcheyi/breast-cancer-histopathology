@@ -382,27 +382,41 @@ with gr.Blocks(
     }
     """
 ) as demo:
-    gr.Markdown("""
-    <div class="centered-container">
-        <h1 style="font-size: 2.5em;">BREAST AI PRO</h1>
-        <h2 style="font-size: 1.5em;">
-            AI Application for Breast Cancer Detection<br>
-            نظام ذكاء اصطناعي لكشف سرطان الثدي<br>
-             پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان
-        </h2>
-        <p style="font-size: 1.2em;">
-            Powered by Revolutionary Deep Learning • 98% Accuracy<br>
-            مدعوم بمودل خاص لتقنيات التعلم العميق - بدقة ٪98<br>
-            پشتگیریا مودلێ تایبەی ففێربوونا کویرا نوی - برێژا ٪98
-        </p>
-        <p style="font-size: 1.2em;">
-            Upload an image or select from examples below and click analyze<br>
-             ارفع صورة أو اختر من النماذج وحلل<br>
-            وێنەکی دابگرە یان نموونەکی بهەڵبژێرەو کلیک کە
-        </p>
-        <hr style="margin: 30px auto; width: 80%; border: 1px solid #ddd;">
-    </div>
-    """)
+gr.Markdown("""
+<style>
+.centered-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+</style>
+
+<div class="centered-container">
+    <h1 style="font-size: 2.5em; margin-bottom: 10px;">BREAST AI PRO</h1>
+    <h2 style="font-size: 1.5em; margin-bottom: 20px;">
+        AI Application for Breast Cancer Detection<br>
+        نظام ذكاء اصطناعي لكشف سرطان الثدي<br>
+        پرۆگرامێ زیرەکیا دەستکرد بو دەستنیشانکرنا شێرپەنجا مەمکان
+    </h2>
+    <p style="font-size: 1.2em; margin-bottom: 10px;">
+        Powered by Revolutionary Deep Learning • 98% Accuracy<br>
+        مدعوم بمودل خاص لتقنيات التعلم العميق - بدقة ٪98<br>
+        پشتگیریا مودلێ تایبەی ففێربوونا کویرا نوی - برێژا ٪98
+    </p>
+    <p style="font-size: 1.2em;">
+        Upload an image or select from examples below and click analyze<br>
+        ارفع صورة أو اختر من النماذج وحلل<br>
+        وێنەکی دابگرە یان نموونەکی بهەڵبژێرەو کلیک کە
+    </p>
+    <hr style="margin: 30px auto; width: 80%; border: 1px solid #ddd;">
+</div>
+""")
+
     
 
     with gr.Row():
