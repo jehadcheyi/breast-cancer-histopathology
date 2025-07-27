@@ -911,7 +911,7 @@ if __name__ == "__main__":
         server_port=7860,
         show_error=True,
         favicon_path=None,
-        ssl_verify=False,
+        ssl_verify=False
         #show_tips=True,
-        enable_queue=True
+        #enable_queue=True
     )
