@@ -912,6 +912,6 @@ if __name__ == "__main__":
         show_error=True,
         favicon_path=None,
         ssl_verify=False,
-        show_tips=True,
+        #show_tips=True,
         enable_queue=True
     )
