@@ -584,16 +584,19 @@ instructions = """
             <div style="font-size: 40px; margin-bottom: 15px;">📤</div>
             <h3 style="color: #1976d2; margin-bottom: 10px;">Step 1: Upload Image</h3>
             <p style="color: #424242;">Upload a high-quality histopathology image or select from our curated example gallery</p>
+            <p style="color: #424242;">وێنەکی دابگرە </p>
         </div>
         <div style="text-align: center; padding: 20px; background: linear-gradient(45deg, #f3e5f5, #ce93d8); border-radius: 15px;">
             <div style="font-size: 40px; margin-bottom: 15px;">🧠</div>
             <h3 style="color: #7b1fa2; margin-bottom: 10px;">Step 2: AI Processing</h3>
             <p style="color: #424242;">Our advanced neural networks analyze tissue patterns and cellular structures</p>
+            <p style="color: #424242;">مودلێ مە دێ وێنەی ب زیرەکیا دەستکرد شلوڤەکەت</p>
         </div>
         <div style="text-align: center; padding: 20px; background: linear-gradient(45deg, #e8f5e8, #a5d6a7); border-radius: 15px;">
             <div style="font-size: 40px; margin-bottom: 15px;">📊</div>
             <h3 style="color: #388e3c; margin-bottom: 10px;">Step 3: Review Results</h3>
             <p style="color: #424242;">Examine detailed diagnostic reports, confidence scores, and visual attention maps</p>
+            <p style="color: #424242;">راپورتا شلوڤەکرنا وێنەی</p>
         </div>
     </div>
     <div style="background: linear-gradient(45deg, #fff3e0, #ffcc02); padding: 20px; border-radius: 12px; margin-top: 20px; text-align: center;">
