@@ -547,7 +547,7 @@ custom_css = """
 """
 
 # Create the modern interface
-title = "🏥 BREAST AI PRO - Advanced Histopathology Analysis System"
+title = "🏥 Advanced Histopathology Analysis System"
 
 description = """
 <div style="text-align: center; padding: 25px;">
@@ -579,6 +579,7 @@ description = """
 instructions = """
 <div style="background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin: 25px 0; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
     <h2 style="color: #2980b9; text-align: center; margin-bottom: 25px;">📋 How to Use the AI Diagnostic System</h2>
+    <h2 style="color: #2980b9; text-align: center; margin-bottom: 25px;">چەوانیا بکارئینانا پروگرامی📋 </h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px;">
         <div style="text-align: center; padding: 20px; background: linear-gradient(45deg, #e3f2fd, #bbdefb); border-radius: 15px;">
             <div style="font-size: 40px; margin-bottom: 15px;">📤</div>
@@ -601,23 +602,6 @@ instructions = """
     </div>
     <div style="background: linear-gradient(45deg, #fff3e0, #ffcc02); padding: 20px; border-radius: 12px; margin-top: 20px; text-align: center;">
         <h4 style="color: #e65100; margin: 0;">💡 Pro Tip: For best results, use high-resolution histopathology images with clear tissue structures</h4>
-    </div>
-</div>
-"""
-
-disclaimer = """
-<div style="background: linear-gradient(45deg, #ffebee, #ffcdd2); border: 2px solid #f44336; color: #c62828; padding: 25px; border-radius: 15px; margin: 25px 0;">
-    <div style="text-align: center; margin-bottom: 15px;">
-        <h2 style="margin: 0; font-size: 1.8em;">⚠️ IMPORTANT MEDICAL DISCLAIMER</h2>
-    </div>
-    <div style="background: rgba(255,255,255,0.8); padding: 20px; border-radius: 10px;">
-        <p style="font-size: 1.1em; line-height: 1.6; margin: 0; text-align: center;">
-            <strong>This AI system is designed exclusively for professional medical assistance and research purposes.</strong><br><br>
-            🏥 Results must be interpreted by qualified healthcare professionals<br>
-            🔬 Does not replace clinical judgment or physical examination<br>
-            📋 Additional diagnostic procedures may be required<br>
-            👨‍⚕️ Always consult with oncologists and pathologists for definitive diagnosis
-        </p>
     </div>
 </div>
 """
