@@ -647,7 +647,7 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="BREAST AI PRO - Ad
                 gr.Markdown("*Upload your histopathology image for comprehensive AI analysis*")
                 
                 image_input = gr.Image(
-                    label="🔬 Upload Histopathology Image | حمّل صورة الأنسجة | وێنەی شیکردنەوەی نەخۆشی",
+                    label="🔬 Upload Histopathology Image | حمّل صورة | داگرتن  ",
                     type="numpy",
                     height=400,
                     elem_classes=["image-container"]
@@ -663,14 +663,14 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="BREAST AI PRO - Ad
                 
                 with gr.Row():
                     submit_btn = gr.Button(
-                        "🔍 Analyze with AI | حلل بالذكاء الاصطناعي | شیکردنەوە بە AI",
+                        "🔍 Analyze with AI | حلل |  شلوڤەکرن ",
                         variant="primary",
                         size="lg",
                         scale=2,
                         elem_classes=["analyze-button"]
                     )
                     clear_btn = gr.Button(
-                        "🧹 Clear | مسح | پاککردنەوە",
+                        "🧹 Clear ",
                         variant="secondary",
                         size="lg",
                         scale=1,
@@ -907,8 +907,6 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="BREAST AI PRO - Ad
 if __name__ == "__main__":
     demo.launch(
         share=True,
-        server_name="0.0.0.0",
-        server_port=7860,
         show_error=True,
         favicon_path=None,
         ssl_verify=False
