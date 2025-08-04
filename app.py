@@ -605,7 +605,8 @@ instructions = """
     </div>
 </div>
 """
-
+disclaimer = """
+"""
 # Create the enhanced interface
 with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="BREAST AI PRO - Advanced Cancer Detection") as demo:
     
