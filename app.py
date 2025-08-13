@@ -102,67 +102,124 @@ except Exception as e:
 print("\n🚀 All AI systems loaded successfully!")
 
 def prep_img(img):
-    img = Image.fromarray(img)
-    img = img.resize(img_size)
-    arr = img_to_array(img) / 255.0
-    return np.expand_dims(arr, axis=0)
+    """Enhanced image preprocessing with proper error handling"""
+    try:
+        print(f"📸 Input image - Shape: {img.shape}, dtype: {img.dtype}, range: [{img.min()}, {img.max()}]")
+        
+        # Ensure image is uint8
+        if img.dtype != np.uint8:
+            if img.max() <= 1.0:
+                img = (img * 255).astype(np.uint8)
+            else:
+                img = img.astype(np.uint8)
+        
+        # Convert to PIL and resize
+        img_pil = Image.fromarray(img)
+        img_resized = img_pil.resize(img_size)
+        
+        # Convert to array and normalize
+        arr = img_to_array(img_resized) / 255.0
+        batch = np.expand_dims(arr, axis=0)
+        
+        print(f"✅ Preprocessed - Shape: {batch.shape}, range: [{batch.min():.3f}, {batch.max():.3f}]")
+        return batch
+        
+    except Exception as e:
+        print(f"❌ Preprocessing error: {str(e)}")
+        raise
 
 def predict(img):
     try:
+        print("🔍 Starting prediction process...")
         arr = prep_img(img)
         
-        # Binary Classification
+        # Binary Classification with detailed logging
+        print("🎯 Running binary classification...")
         binary_pred = models['binary'].predict(arr, verbose=0)
+        print(f"Binary prediction shape: {binary_pred.shape}")
+        print(f"Binary prediction values: {binary_pred[0]}")
+        
         pred_idx = np.argmax(binary_pred[0])
         binary_conf = 100 * np.max(binary_pred[0])
         label = classes['binary'][pred_idx]
+        
+        print(f"✅ Binary result: {label} (confidence: {binary_conf:.1f}%)")
 
-        # Subtype Classification
+        # Subtype Classification with detailed logging
+        print(f"🔬 Running {label} subtype classification...")
+        subtype_pred = models[label].predict(arr, verbose=0)
+        print(f"Subtype prediction shape: {subtype_pred.shape}")
+        print(f"Subtype prediction values: {subtype_pred[0]}")
+        
+        subtype_idx = np.argmax(subtype_pred[0])
+        subtype_conf = 100 * np.max(subtype_pred[0])
+        subtype_code = classes[label][subtype_idx]
+        subtype_name = classes[f'{label}_names'][subtype_code]
+        
+        print(f"✅ Subtype result: {subtype_name} (confidence: {subtype_conf:.1f}%)")
+        
+        # Calculate all subtype probabilities
         subtype_probs = {}
-        if label == 'benign':
-            subtype_pred = models['benign'].predict(arr, verbose=0)
-            subtype_idx = np.argmax(subtype_pred[0])
-            subtype_conf = 100 * np.max(subtype_pred[0])
-            subtype_code = classes['benign'][subtype_idx]
-            subtype_name = classes['benign_names'][subtype_code]
+        for code, prob in zip(classes[label], subtype_pred[0]):
+            subtype_probs[classes[f'{label}_names'][code]] = prob*100
             
-            for code, prob in zip(classes['benign'], subtype_pred[0]):
-                subtype_probs[classes['benign_names'][code]] = prob*100
-        else:
-            subtype_pred = models['malignant'].predict(arr, verbose=0)
-            subtype_idx = np.argmax(subtype_pred[0])
-            subtype_conf = 100 * np.max(subtype_pred[0])
-            subtype_code = classes['malignant'][subtype_idx]
-            subtype_name = classes['malignant_names'][subtype_code]
-            
-            for code, prob in zip(classes['malignant'], subtype_pred[0]):
-                subtype_probs[classes['malignant_names'][code]] = prob*100
-
+        print("🎉 Prediction completed successfully!")
         return pred_idx, binary_conf, subtype_name, subtype_conf, subtype_probs
+        
     except Exception as e:
-        print(f"Error during prediction: {str(e)}")
+        print(f"❌ Prediction error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise
 
 def make_heatmap(img, pred_idx):
-    """Generate Grad-CAM heatmap"""
-    resized = cv2.resize(img, img_size)
-    img_in = resized.astype(np.float32) / 255.0
-    img_in = np.expand_dims(img_in, axis=0)
+    """Generate Grad-CAM heatmap with enhanced error handling"""
+    try:
+        print("🌡️ Generating Grad-CAM heatmap...")
+        
+        # Ensure image is properly formatted
+        if img.dtype != np.uint8:
+            if img.max() <= 1.0:
+                img = (img * 255).astype(np.uint8)
+            else:
+                img = img.astype(np.uint8)
+        
+        resized = cv2.resize(img, img_size)
+        img_in = resized.astype(np.float32) / 255.0
+        img_in = np.expand_dims(img_in, axis=0)
 
-    with tf.GradientTape() as tape:
-        conv_out, preds = grad_model(img_in)
-        loss = preds[:, pred_idx]
+        with tf.GradientTape() as tape:
+            conv_out, preds = grad_model(img_in)
+            loss = preds[:, pred_idx]
 
-    grads = tape.gradient(loss, conv_out)[0]
-    pooled = tf.reduce_mean(grads, axis=(0, 1))
-    conv_out = conv_out[0]
-    heatmap = conv_out @ pooled[..., tf.newaxis]
-    heatmap = tf.squeeze(heatmap)
-    heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
-    heatmap = heatmap.numpy()
-
-    heatmap = cv2.resize(heatmap, target_size)
-    return cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET)
+        grads = tape.gradient(loss, conv_out)
+        
+        if grads is None:
+            print("⚠️ No gradients computed, returning empty heatmap")
+            return np.zeros((*target_size, 3), dtype=np.uint8)
+            
+        grads = grads[0]
+        pooled = tf.reduce_mean(grads, axis=(0, 1))
+        conv_out = conv_out[0]
+        heatmap = conv_out @ pooled[..., tf.newaxis]
+        heatmap = tf.squeeze(heatmap)
+        heatmap = tf.maximum(heatmap, 0)
+        
+        # Normalize heatmap
+        max_val = tf.math.reduce_max(heatmap)
+        if max_val > 0:
+            heatmap = heatmap / max_val
+        
+        heatmap = heatmap.numpy()
+        heatmap = cv2.resize(heatmap, target_size)
+        
+        print("✅ Grad-CAM heatmap generated successfully")
+        return cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET)
+        
+    except Exception as e:
+        print(f"❌ Grad-CAM error: {str(e)}")
+        # Return empty heatmap on error
+        return np.zeros((*target_size, 3), dtype=np.uint8)
 
 def get_crop_box(shape, percent):
     """Calculate centered crop box coordinates"""
@@ -174,91 +231,145 @@ def get_crop_box(shape, percent):
     return left, top, left + crop_w, top + crop_h
 
 def create_visualization(img, pred_idx, binary_conf, label, subtype_conf, zooms=[75, 50, 25]):
-    """Create visualization with detailed explanations"""
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    h, w = img.shape[:2]
-    levels = 1 + len(zooms)
+    """Create visualization with detailed explanations and proper error handling"""
+    try:
+        print("🎨 Creating comprehensive visualization...")
+        
+        # Ensure image is properly formatted
+        if img.dtype != np.uint8:
+            if img.max() <= 1.0:
+                img = (img * 255).astype(np.uint8)
+            else:
+                img = img.astype(np.uint8)
+        
+        # Convert BGR to RGB if needed (OpenCV uses BGR)
+        if len(img.shape) == 3 and img.shape[2] == 3:
+            # Assume input is RGB from Gradio
+            img_rgb = img
+        else:
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+            
+        h, w = img_rgb.shape[:2]
+        levels = 1 + len(zooms)
 
-    fig, axs = plt.subplots(levels, 3, figsize=(18, 6 * levels), dpi=100)
-    if levels == 1:
-        axs = [axs]
+        fig, axs = plt.subplots(levels, 3, figsize=(18, 6 * levels), dpi=100)
+        if levels == 1:
+            axs = [axs]
 
-    # Full image analysis
-    resized = cv2.resize(img, target_size)
-    heatmap = make_heatmap(img, pred_idx)
-    overlay = cv2.addWeighted(resized, 0.6, heatmap, 0.4, 0)
+        # Full image analysis
+        resized = cv2.resize(img_rgb, target_size)
+        heatmap = make_heatmap(img, pred_idx)
+        
+        # Convert heatmap from BGR to RGB for display
+        heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+        
+        # Create overlay
+        if heatmap.sum() > 0:
+            overlay = cv2.addWeighted(resized, 0.6, heatmap, 0.4, 0)
+        else:
+            overlay = resized
 
-    # Convert back to RGB for display
-    resized_rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-    heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
-    overlay_rgb = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+        axs[0][0].imshow(resized)
+        axs[0][0].set_title("🔬 Original Tissue Sample\n(Full View)", fontsize=14, pad=15, fontweight='bold')
+        axs[0][0].axis('off')
 
-    axs[0][0].imshow(resized_rgb)
-    axs[0][0].set_title("🔬 Original Tissue Sample\n(Full View)", fontsize=14, pad=15, fontweight='bold')
-    axs[0][0].axis('off')
+        axs[0][1].imshow(heatmap_rgb)
+        axs[0][1].set_title("🌡️ AI Attention Heatmap\n(Red = High Importance)", fontsize=14, pad=15, fontweight='bold')
+        axs[0][1].axis('off')
 
-    axs[0][1].imshow(heatmap_rgb)
-    axs[0][1].set_title("🌡️ AI Attention Heatmap\n(Red = High Importance)", fontsize=14, pad=15, fontweight='bold')
-    axs[0][1].axis('off')
+        axs[0][2].imshow(overlay)
+        axs[0][2].set_title("🎯 Combined Analysis\n(AI Focus Areas)", fontsize=14, pad=15, fontweight='bold')
+        axs[0][2].axis('off')
 
-    axs[0][2].imshow(overlay_rgb)
-    axs[0][2].set_title("🎯 Combined Analysis\n(AI Focus Areas)", fontsize=14, pad=15, fontweight='bold')
-    axs[0][2].axis('off')
+        # Zoomed analysis
+        for i, zoom in enumerate(zooms):
+            try:
+                x1, y1, x2, y2 = get_crop_box(img_rgb.shape, zoom)
+                
+                # Ensure valid crop coordinates
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(w, x2), min(h, y2)
+                
+                if x2 > x1 and y2 > y1:
+                    crop = img_rgb[y1:y2, x1:x2]
+                    
+                    resized_crop = cv2.resize(crop, target_size)
+                    crop_heat = make_heatmap(crop, pred_idx)
+                    crop_heat_rgb = cv2.cvtColor(crop_heat, cv2.COLOR_BGR2RGB)
+                    
+                    if crop_heat.sum() > 0:
+                        crop_over = cv2.addWeighted(resized_crop, 0.6, crop_heat, 0.4, 0)
+                    else:
+                        crop_over = resized_crop
 
-    # Zoomed analysis
-    for i, zoom in enumerate(zooms):
-        x1, y1, x2, y2 = get_crop_box(img.shape, zoom)
-        crop = img[y1:y2, x1:x2]
+                    # Create highlight image
+                    highlight = img_rgb.copy()
+                    cv2.rectangle(highlight, (x1, y1), (x2, y2), (255, 0, 0), 3)
 
-        resized_crop = cv2.resize(crop, target_size)
-        crop_heat = make_heatmap(crop, pred_idx)
-        crop_over = cv2.addWeighted(resized_crop, 0.6, crop_heat, 0.4, 0)
+                    axs[i+1][0].imshow(highlight)
+                    axs[i+1][0].set_title(f"🔍 Analysis Region: {zoom}%\n(Red box shows zoom area)", fontsize=12, pad=10)
+                    axs[i+1][0].axis('off')
 
-        mask = np.zeros((h, w), dtype=np.uint8)
-        mask[y1:y2, x1:x2] = 1
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
-        highlight = np.where(mask[..., None], img, gray_rgb)
-        cv2.rectangle(highlight, (x1, y1), (x2, y2), (255, 0, 0), 3)
+                    axs[i+1][1].imshow(crop_heat_rgb)
+                    axs[i+1][1].set_title(f"🌡️ Detailed Heatmap\n({zoom}% scale analysis)", fontsize=12, pad=10)
+                    axs[i+1][1].axis('off')
 
-        # Convert to RGB for display
-        highlight_rgb = cv2.cvtColor(highlight, cv2.COLOR_BGR2RGB)
-        resized_crop_rgb = cv2.cvtColor(resized_crop, cv2.COLOR_BGR2RGB)
-        crop_heat_rgb = cv2.cvtColor(crop_heat, cv2.COLOR_BGR2RGB)
-        crop_over_rgb = cv2.cvtColor(crop_over, cv2.COLOR_BGR2RGB)
+                    axs[i+1][2].imshow(crop_over)
+                    axs[i+1][2].set_title(f"🎯 Focused Analysis\n({zoom}% scale overlay)", fontsize=12, pad=10)
+                    axs[i+1][2].axis('off')
+                else:
+                    # Handle invalid crop
+                    for j in range(3):
+                        axs[i+1][j].text(0.5, 0.5, f"Invalid crop at {zoom}%", 
+                                       ha='center', va='center', transform=axs[i+1][j].transAxes)
+                        axs[i+1][j].axis('off')
+                        
+            except Exception as e:
+                print(f"⚠️ Error creating zoom level {zoom}%: {str(e)}")
+                for j in range(3):
+                    axs[i+1][j].text(0.5, 0.5, f"Error at {zoom}%", 
+                                   ha='center', va='center', transform=axs[i+1][j].transAxes)
+                    axs[i+1][j].axis('off')
 
-        axs[i+1][0].imshow(highlight_rgb)
-        axs[i+1][0].set_title(f"🔍 Analysis Region: {zoom}%\n(Blue box shows zoom area)", fontsize=12, pad=10)
-        axs[i+1][0].axis('off')
+        # Main title with diagnosis information
+        diagnosis = classes['binary'][pred_idx].upper()
+        color = '#4CAF50' if diagnosis == 'BENIGN' else '#F44336'
 
-        axs[i+1][1].imshow(crop_heat_rgb)
-        axs[i+1][1].set_title(f"🌡️ Detailed Heatmap\n({zoom}% scale analysis)", fontsize=12, pad=10)
-        axs[i+1][1].axis('off')
+        plt.suptitle(
+            f"🏥 ADVANCED HISTOPATHOLOGY AI ANALYSIS\n\n"
+            f"🎯 Primary Diagnosis: {diagnosis} ({binary_conf:.1f}% confidence)\n"
+            f"🔬 Multi-Scale Attention Visualization System",
+            fontsize=18,
+            y=0.98,
+            color=color,
+            fontweight='bold'
+        )
 
-        axs[i+1][2].imshow(crop_over_rgb)
-        axs[i+1][2].set_title(f"🎯 Focused Analysis\n({zoom}% scale overlay)", fontsize=12, pad=10)
-        axs[i+1][2].axis('off')
-
-    # Main title with diagnosis information
-    diagnosis = classes['binary'][pred_idx].upper()
-    color = '#4CAF50' if diagnosis == 'BENIGN' else '#F44336'
-
-    plt.suptitle(
-        f"🏥 ADVANCED HISTOPATHOLOGY AI ANALYSIS\n\n"
-        f"🎯 Primary Diagnosis: {diagnosis} ({binary_conf:.1f}% confidence)\n"
-        f"🔬 Multi-Scale Attention Visualization System",
-        fontsize=18,
-        y=0.98,
-        color=color,
-        fontweight='bold'
-    )
-
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.90)
-    return fig
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.90)
+        
+        print("✅ Visualization created successfully")
+        return fig
+        
+    except Exception as e:
+        print(f"❌ Visualization error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Return simple error figure
+        fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+        ax.text(0.5, 0.5, f"Visualization Error\n{str(e)}", 
+                ha='center', va='center', transform=ax.transAxes, fontsize=14)
+        ax.axis('off')
+        return fig
 
 def analyze_image(input_img):
+    print("\n" + "="*50)
+    print("🚀 STARTING IMAGE ANALYSIS")
+    print("="*50)
+    
     if input_img is None:
+        print("❌ No image provided")
         return """
         <div style="background: linear-gradient(45deg, #FFA726, #FF7043); color: white; padding: 25px; border-radius: 15px; text-align: center; margin: 20px 0;">
             <h2 style="margin: 0; font-size: 1.5em;">⚠️ No Image Provided</h2>
@@ -270,13 +381,19 @@ def analyze_image(input_img):
         """, None, "🟡 **Status**: Waiting for Image Upload"
 
     try:
-        img = input_img.astype('uint8')
-        pred_idx, binary_conf, subtype, subtype_conf, subtype_probs = predict(img)
+        print(f"📊 Input image info - Shape: {input_img.shape}, dtype: {input_img.dtype}")
+        print(f"📊 Value range: [{input_img.min()}, {input_img.max()}]")
+        
+        # Pass original image to predict function (don't convert here)
+        pred_idx, binary_conf, subtype, subtype_conf, subtype_probs = predict(input_img)
 
         label = classes['binary'][pred_idx]
         diagnosis = label.upper()
         diagnosis_color = "#4CAF50" if diagnosis == "BENIGN" else "#F44336"
         diagnosis_emoji = "🟢" if diagnosis == "BENIGN" else "🔴"
+        
+        print(f"🎯 Final diagnosis: {diagnosis} ({binary_conf:.1f}%)")
+        print(f"🔬 Subtype: {subtype} ({subtype_conf:.1f}%)")
         
         # Risk assessment
         if diagnosis == "BENIGN":
@@ -376,11 +493,19 @@ def analyze_image(input_img):
         status_msg = f"{diagnosis_emoji} **Status**: Analysis Complete - {diagnosis} detected with {binary_conf:.1f}% confidence"
 
         # Create visualization
-        fig = create_visualization(img, pred_idx, binary_conf, label, subtype_conf)
+        fig = create_visualization(input_img, pred_idx, binary_conf, label, subtype_conf)
+
+        print("🎉 ANALYSIS COMPLETED SUCCESSFULLY!")
+        print("="*50)
 
         return diagnosis_html, fig, status_msg
 
     except Exception as e:
+        print(f"❌ ANALYSIS FAILED: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("="*50)
+        
         error_html = f"""
         <div style="background: linear-gradient(45deg, #e74c3c, #c0392b); color: white; padding: 25px; border-radius: 15px; margin: 20px 0;">
             <h2 style="color: white; margin: 0; text-align: center;">❌ ANALYSIS ERROR</h2>
