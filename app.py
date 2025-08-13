@@ -894,5 +894,10 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="BREAST AI PRO - Ad
 # Launch the application
 if __name__ == "__main__":
     demo.launch(
- 
+        share=True,
+        show_error=True,
+        favicon_path=None,
+        ssl_verify=False
+        #show_tips=True,
+        #enable_queue=True
     )
