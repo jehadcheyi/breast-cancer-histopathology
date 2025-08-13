@@ -173,54 +173,25 @@ def predict(img):
         raise
 
 def make_heatmap(img, pred_idx):
-    """Generate Grad-CAM heatmap with enhanced error handling"""
-    try:
-        print("🌡️ Generating Grad-CAM heatmap...")
-        
-        # Ensure image is properly formatted
-        if img.dtype != np.uint8:
-            if img.max() <= 1.0:
-                img = (img * 255).astype(np.uint8)
-            else:
-                img = img.astype(np.uint8)
-        
-        resized = cv2.resize(img, img_size)
-        img_in = resized.astype(np.float32) / 255.0
-        img_in = np.expand_dims(img_in, axis=0)
+    """Generate Grad-CAM heatmap"""
+    resized = cv2.resize(img, img_size)
+    img_in = resized.astype(np.float32) / 255.0
+    img_in = np.expand_dims(img_in, axis=0)
 
-        with tf.GradientTape() as tape:
-            conv_out, preds = grad_model(img_in)
-            loss = preds[:, pred_idx]
+    with tf.GradientTape() as tape:
+        conv_out, preds = grad_model(img_in)
+        loss = preds[:, pred_idx]
 
-        grads = tape.gradient(loss, conv_out)
-        
-        if grads is None:
-            print("⚠️ No gradients computed, returning empty heatmap")
-            return np.zeros((*target_size, 3), dtype=np.uint8)
-            
-        grads = grads[0]
-        pooled = tf.reduce_mean(grads, axis=(0, 1))
-        conv_out = conv_out[0]
-        heatmap = conv_out @ pooled[..., tf.newaxis]
-        heatmap = tf.squeeze(heatmap)
-        heatmap = tf.maximum(heatmap, 0)
-        
-        # Normalize heatmap
-        max_val = tf.math.reduce_max(heatmap)
-        if max_val > 0:
-            heatmap = heatmap / max_val
-        
-        heatmap = heatmap.numpy()
-        heatmap = cv2.resize(heatmap, target_size)
-        
-        print("✅ Grad-CAM heatmap generated successfully")
-        return cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET)
-        
-    except Exception as e:
-        print(f"❌ Grad-CAM error: {str(e)}")
-        # Return empty heatmap on error
-        return np.zeros((*target_size, 3), dtype=np.uint8)
+    grads = tape.gradient(loss, conv_out)[0]
+    pooled = tf.reduce_mean(grads, axis=(0, 1))
+    conv_out = conv_out[0]
+    heatmap = conv_out @ pooled[..., tf.newaxis]
+    heatmap = tf.squeeze(heatmap)
+    heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
+    heatmap = heatmap.numpy()
 
+    heatmap = cv2.resize(heatmap, target_size)
+    return cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET)
 def get_crop_box(shape, percent):
     """Calculate centered crop box coordinates"""
     h, w = shape[:2]
