@@ -1,5 +1,5 @@
 gradio
-tensorflow-cpu==2.15.0
+tensorflow
 opencv-python
 Pillow
 matplotlib
