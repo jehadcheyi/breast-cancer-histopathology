@@ -9,6 +9,9 @@ from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import gradio as gr
 import warnings
 import logging
+from sklearn.feature_extraction import image as sk_image
+from scipy import ndimage
+import io
 
 # Suppress TensorFlow warnings and configure logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -51,6 +54,187 @@ classes = {
 # Initialize models dictionary
 models = {}
 grad_model = None
+
+def validate_histopathology_image(img):
+    """
+    Validate if the uploaded image is a histopathology image
+    Returns: (is_valid, confidence_score, reason)
+    """
+    try:
+        if img is None:
+            return False, 0.0, "No image provided"
+        
+        # Convert to numpy array if needed
+        if isinstance(img, Image.Image):
+            img_array = np.array(img)
+        else:
+            img_array = img
+        
+        # Basic image checks
+        if len(img_array.shape) != 3:
+            return False, 0.0, "Image must be in color (RGB)"
+        
+        height, width = img_array.shape[:2]
+        
+        # Check minimum resolution
+        if height < 100 or width < 100:
+            return False, 0.0, "Image resolution too low (minimum 100x100 pixels)"
+        
+        # Check if image is too small (likely not a medical scan)
+        if height < 200 and width < 200:
+            return False, 0.2, "Image appears too small for histopathology analysis"
+        
+        # Convert to different color spaces for analysis
+        img_rgb = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR) if img_array.shape[2] == 3 else img_array
+        img_gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
+        img_hsv = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2HSV)
+        
+        validation_score = 0.0
+        reasons = []
+        
+        # 1. Check for typical histopathology staining colors (H&E staining)
+        # H&E staining typically shows pink/red (eosin) and blue/purple (hematoxylin)
+        pink_mask = cv2.inRange(img_hsv, np.array([140, 50, 50]), np.array([180, 255, 255]))  # Pink/Red range
+        blue_mask = cv2.inRange(img_hsv, np.array([100, 50, 50]), np.array([130, 255, 255]))  # Blue/Purple range
+        
+        pink_ratio = np.sum(pink_mask > 0) / (height * width)
+        blue_ratio = np.sum(blue_mask > 0) / (height * width)
+        
+        if pink_ratio > 0.05 and blue_ratio > 0.05:  # At least 5% of each color
+            validation_score += 0.3
+            reasons.append("✓ Contains typical H&E staining colors")
+        elif pink_ratio > 0.02 or blue_ratio > 0.02:
+            validation_score += 0.15
+            reasons.append("~ Partial H&E staining detected")
+        else:
+            reasons.append("✗ Missing typical histopathology staining colors")
+        
+        # 2. Check for cellular structures (texture analysis)
+        # Calculate local binary patterns to detect cellular textures
+        def calculate_texture_score(gray_img):
+            # Calculate gradient magnitude
+            grad_x = cv2.Sobel(gray_img, cv2.CV_64F, 1, 0, ksize=3)
+            grad_y = cv2.Sobel(gray_img, cv2.CV_64F, 0, 1, ksize=3)
+            gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
+            
+            # Calculate texture variance
+            texture_variance = np.var(gradient_magnitude)
+            return texture_variance
+        
+        texture_score = calculate_texture_score(img_gray)
+        
+        if texture_score > 1000:  # High texture variance indicates cellular structures
+            validation_score += 0.25
+            reasons.append("✓ High texture complexity (cellular structures detected)")
+        elif texture_score > 500:
+            validation_score += 0.15
+            reasons.append("~ Moderate texture complexity detected")
+        else:
+            reasons.append("✗ Low texture complexity (may not be microscopic tissue)")
+        
+        # 3. Check for appropriate contrast and brightness distribution
+        hist = cv2.calcHist([img_gray], [0], None, [256], [0, 256])
+        hist_normalized = hist.flatten() / (height * width)
+        
+        # Good histopathology images should have distributed intensities
+        non_zero_bins = np.sum(hist_normalized > 0.001)  # Bins with significant content
+        
+        if non_zero_bins > 100:  # Good intensity distribution
+            validation_score += 0.2
+            reasons.append("✓ Good intensity distribution")
+        elif non_zero_bins > 50:
+            validation_score += 0.1
+            reasons.append("~ Moderate intensity distribution")
+        else:
+            reasons.append("✗ Poor intensity distribution")
+        
+        # 4. Check for medical imaging artifacts or characteristics
+        # Look for uniform background (common in microscopy)
+        edges = cv2.Canny(img_gray, 50, 150)
+        edge_density = np.sum(edges > 0) / (height * width)
+        
+        if 0.1 < edge_density < 0.4:  # Moderate edge density typical of tissue
+            validation_score += 0.15
+            reasons.append("✓ Appropriate edge density for tissue imaging")
+        elif 0.05 < edge_density < 0.6:
+            validation_score += 0.08
+            reasons.append("~ Acceptable edge density")
+        else:
+            if edge_density <= 0.05:
+                reasons.append("✗ Too few edges (may be blank or uniform image)")
+            else:
+                reasons.append("✗ Too many edges (may be non-medical image)")
+        
+        # 5. Check aspect ratio and size appropriateness
+        aspect_ratio = max(width, height) / min(width, height)
+        if aspect_ratio < 3.0:  # Not extremely elongated
+            validation_score += 0.1
+            reasons.append("✓ Appropriate aspect ratio")
+        else:
+            reasons.append("✗ Unusual aspect ratio for histopathology")
+        
+        # Final validation decision
+        is_valid = validation_score >= 0.4  # Require at least 40% confidence
+        
+        return is_valid, validation_score, reasons
+        
+    except Exception as e:
+        return False, 0.0, f"Error during validation: {str(e)}"
+
+def validate_and_process_upload(img):
+    """
+    Process uploaded image with validation
+    Returns processed image or None with error message
+    """
+    if img is None:
+        return None
+    
+    try:
+        # Validate the image
+        is_valid, confidence, reasons = validate_histopathology_image(img)
+        
+        if not is_valid:
+            # Create error message
+            reason_text = "\n".join(reasons) if isinstance(reasons, list) else str(reasons)
+            
+            error_msg = f"""
+            🚫 **INVALID IMAGE DETECTED**
+            
+            **Validation Score:** {confidence:.1%}
+            **Minimum Required:** 40%
+            
+            **Analysis Results:**
+            {reason_text}
+            
+            **Please upload a valid histopathology image with:**
+            • H&E staining (pink and blue/purple colors)
+            • Microscopic tissue structures
+            • Appropriate resolution (minimum 200x200 pixels)
+            • Medical imaging characteristics
+            """
+            
+            gr.Warning(f"❌ Invalid histopathology image (confidence: {confidence:.1%})")
+            return None
+        
+        else:
+            # Image is valid, process it
+            reason_text = "\n".join(reasons) if isinstance(reasons, list) else str(reasons)
+            
+            success_msg = f"""
+            ✅ **VALID HISTOPATHOLOGY IMAGE**
+            
+            **Validation Score:** {confidence:.1%}
+            
+            **Detected Features:**
+            {reason_text}
+            """
+            
+            gr.Info(f"✅ Valid histopathology image detected (confidence: {confidence:.1%})")
+            return img
+            
+    except Exception as e:
+        gr.Error(f"❌ Error processing image: {str(e)}")
+        return None
 
 def safe_model_load():
     """Safely load models with proper error handling"""
@@ -363,6 +547,22 @@ def analyze_image(input_img):
             </div>
             """, None, "🔴 **Status**: System Error - Models Not Loaded"
 
+        # Additional validation before analysis
+        is_valid, confidence, reasons = validate_histopathology_image(input_img)
+        if not is_valid:
+            reason_text = "\n".join(reasons) if isinstance(reasons, list) else str(reasons)
+            return f"""
+            <div style="background: linear-gradient(45deg, #FF5722, #D32F2F); color: white; padding: 25px; border-radius: 15px; text-align: center;">
+                <h2>🚫 INVALID HISTOPATHOLOGY IMAGE</h2>
+                <p><strong>Validation Score:</strong> {confidence:.1%} (Minimum: 40%)</p>
+                <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px; margin: 15px 0; text-align: left;">
+                    <strong>Analysis Results:</strong><br>
+                    {reason_text.replace(chr(10), '<br>')}
+                </div>
+                <p><strong>Please upload a valid histopathology image with H&E staining</strong></p>
+            </div>
+            """, None, f"🔴 **Status**: Invalid Image - {confidence:.1%} confidence"
+
         img = input_img.astype('uint8')
         pred_idx, binary_conf, subtype, subtype_conf, subtype_probs = predict(img)
 
@@ -429,10 +629,14 @@ def analyze_image(input_img):
                 <div style="background: {diagnosis_color}; color: white; padding: 8px 20px; border-radius: 25px; display: inline-block; margin: 15px 0;">
                     Primary Diagnosis: {diagnosis}
                 </div>
+                <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 10px; margin: 10px 0;">
+                    <small>✅ Image Validation: {confidence:.1%} confidence (Valid histopathology)</small>
+                </div>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
                 <div style="background: rgba(255,255,255,0.9); padding: 20px; border-radius: 15px; text-align: center;">
+                    
                     <h3 style="color: {diagnosis_color}; margin-top: 0;">🎯 Primary Confidence</h3>
                     <div style="font-size: 2.5em; font-weight: bold; color: {diagnosis_color};">{binary_conf:.1f}%</div>
                     <div style="background: {risk_color}; color: white; padding: 5px 15px; border-radius: 20px; margin-top: 10px;">
@@ -513,6 +717,30 @@ def get_sample_images():
     
     return sample_images
 
+def handle_sample_selection(evt: gr.SelectData):
+    """Handle sample image selection from gallery"""
+    try:
+        sample_images = get_sample_images()
+        if evt.index < len(sample_images):
+            selected_img, filename = sample_images[evt.index]
+            gr.Info(f"✅ Loaded sample: {filename}")
+            return selected_img
+        else:
+            gr.Warning("❌ Sample image not found")
+            return None
+    except Exception as e:
+        gr.Error(f"❌ Error loading sample: {str(e)}")
+        return None
+
+def clear_all():
+    """Clear all inputs and outputs"""
+    return None, """
+    <div style="background: linear-gradient(45deg, #3498db, #2980b9); color: white; padding: 20px; border-radius: 15px; text-align: center;">
+        <h2>🔄 Interface Cleared</h2>
+        <p>Ready for new analysis. Please upload a histopathology image.</p>
+    </div>
+    """, None, "🟡 **Status**: Ready for New Analysis"
+
 # Initialize the system
 print("🚀 Starting Breast Cancer AI Analysis System...")
 
@@ -521,7 +749,6 @@ model_load_success = safe_model_load()
 
 if not model_load_success:
     print("❌ Failed to initialize AI models. Please check your configuration.")
-    # You might want to exit here or show an error interface
 
 # Load sample images
 sample_images = get_sample_images()
@@ -568,6 +795,22 @@ custom_css = """
     font-weight: bold !important;
     color: white !important;
 }
+
+.validation-info {
+    background: rgba(76, 175, 80, 0.1);
+    border: 2px solid #4CAF50;
+    border-radius: 10px;
+    padding: 15px;
+    margin: 10px 0;
+}
+
+.validation-error {
+    background: rgba(244, 67, 54, 0.1);
+    border: 2px solid #F44336;
+    border-radius: 10px;
+    padding: 15px;
+    margin: 10px 0;
+}
 """
 
 # Create the interface
@@ -579,6 +822,12 @@ description = """
     <p style="font-size: 1.2em; color: #34495e; max-width: 800px; margin: 0 auto;">
         Advanced deep learning system for histopathological analysis with real-time diagnosis and visualization
     </p>
+    <div style="background: rgba(255, 255, 255, 0.9); padding: 15px; border-radius: 10px; margin: 20px auto; max-width: 600px;">
+        <h3 style="color: #e74c3c; margin: 0;">🛡️ Image Validation Active</h3>
+        <p style="margin: 10px 0; color: #2c3e50;">
+            Only valid histopathology images with H&E staining will be accepted for analysis
+        </p>
+    </div>
 </div>
 """
 
@@ -603,11 +852,25 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="Breast Cancer AI A
                 gr.HTML('<div class="analysis-card">')
                 gr.Markdown("### 📤 **Upload & Analyze**")
                 
+                # Image upload with validation
                 image_input = gr.Image(
-                    label="🔬 Upload Histopathology Image",
+                    label="🔬 Upload Histopathology Image (Auto-validated)",
                     type="numpy",
                     height=350
                 )
+                
+                # Validation info display
+                validation_info = gr.HTML("""
+                    <div style="background: #e3f2fd; border: 2px solid #2196f3; border-radius: 10px; padding: 15px; margin: 10px 0;">
+                        <h4 style="color: #1976d2; margin: 0 0 10px 0;">🔍 Image Validation Requirements</h4>
+                        <ul style="color: #424242; margin: 0; padding-left: 20px;">
+                            <li>H&E stained histopathology images</li>
+                            <li>Minimum resolution: 200x200 pixels</li>
+                            <li>Clear tissue structures visible</li>
+                            <li>Appropriate medical imaging characteristics</li>
+                        </ul>
+                    </div>
+                """)
                 
                 with gr.Row():
                     submit_btn = gr.Button(
@@ -625,7 +888,7 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="Breast Cancer AI A
                         elem_classes=["clear-button"]
                     )
                 
-                status_output = gr.Markdown("🟡 **Status**: System Ready")
+                status_output = gr.Markdown("🟡 **Status**: System Ready - Upload image for validation")
                 gr.HTML('</div>')
             
             # Sample gallery
@@ -633,6 +896,7 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="Breast Cancer AI A
                 with gr.Group():
                     gr.HTML('<div class="analysis-card">')
                     gr.Markdown("### 🖼️ **Sample Images**")
+                    gr.Markdown("*Click any sample to load it for analysis*")
                     
                     gallery_items = [(img, f"Sample: {name}") for img, name in sample_images]
                     example_gallery = gr.Gallery(
@@ -646,4 +910,133 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="Breast Cancer AI A
                     gr.HTML('</div>')
         
         # Right column - Results
-        with gr.Column
+        with gr.Column(scale=2):
+            with gr.Group():
+                gr.HTML('<div class="analysis-card">')
+                gr.Markdown("### 📊 **Analysis Results**")
+                
+                # Results display
+                results_output = gr.HTML("""
+                    <div style="background: linear-gradient(45deg, #f8f9fa, #e9ecef); padding: 30px; border-radius: 15px; text-align: center; border: 2px dashed #dee2e6;">
+                        <h2 style="color: #6c757d; margin-bottom: 15px;">🔬 AI Analysis Center</h2>
+                        <p style="color: #6c757d; font-size: 1.1em;">Upload a histopathology image to begin comprehensive AI analysis</p>
+                        <div style="margin: 20px 0;">
+                            <div style="display: inline-block; background: #007bff; color: white; padding: 8px 16px; border-radius: 20px; margin: 5px;">
+                                🎯 Binary Classification
+                            </div>
+                            <div style="display: inline-block; background: #28a745; color: white; padding: 8px 16px; border-radius: 20px; margin: 5px;">
+                                🔬 Subtype Analysis
+                            </div>
+                            <div style="display: inline-block; background: #ffc107; color: black; padding: 8px 16px; border-radius: 20px; margin: 5px;">
+                                🌡️ Grad-CAM Visualization
+                            </div>
+                        </div>
+                    </div>
+                """)
+                
+                gr.HTML('</div>')
+            
+            # Visualization section
+            with gr.Group():
+                gr.HTML('<div class="analysis-card">')
+                gr.Markdown("### 🎯 **AI Visualization & Heatmaps**")
+                
+                visualization_output = gr.Plot(
+                    label="AI Analysis Visualization",
+                    show_label=False
+                )
+                
+                gr.HTML('</div>')
+    
+    # Footer information
+    with gr.Row():
+        with gr.Column():
+            gr.HTML("""
+                <div style="background: rgba(255, 255, 255, 0.9); padding: 20px; border-radius: 15px; margin-top: 20px; text-align: center;">
+                    <h3 style="color: #2c3e50; margin-bottom: 15px;">🏥 Medical AI Assistant</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 20px 0;">
+                        <div style="background: #e8f5e8; padding: 15px; border-radius: 10px;">
+                            <h4 style="color: #2e7d32; margin: 0 0 10px 0;">✅ Validated Analysis</h4>
+                            <p style="color: #1b5e20; margin: 0;">Only processes verified histopathology images</p>
+                        </div>
+                        <div style="background: #e3f2fd; padding: 15px; border-radius: 10px;">
+                            <h4 style="color: #1976d2; margin: 0 0 10px 0;">🎯 High Accuracy</h4>
+                            <p style="color: #0d47a1; margin: 0;">Advanced deep learning models for precise diagnosis</p>
+                        </div>
+                        <div style="background: #fff3e0; padding: 15px; border-radius: 10px;">
+                            <h4 style="color: #f57c00; margin: 0 0 10px 0;">🔬 Detailed Analysis</h4>
+                            <p style="color: #e65100; margin: 0;">Comprehensive subtype classification and visualization</p>
+                        </div>
+                    </div>
+                    <div style="background: #ffebee; padding: 15px; border-radius: 10px; margin-top: 20px;">
+                        <p style="color: #c62828; margin: 0; font-weight: bold;">
+                            ⚠️ For Professional Use Only - Always consult healthcare professionals for medical decisions
+                        </p>
+                    </div>
+                </div>
+            """)
+    
+    # Event handlers
+    
+    # Image upload with validation
+    def handle_image_upload(img):
+        """Handle image upload with validation"""
+        if img is None:
+            return img, "🟡 **Status**: No image uploaded"
+        
+        # Validate the image
+        validated_img = validate_and_process_upload(img)
+        
+        if validated_img is not None:
+            return validated_img, "✅ **Status**: Valid histopathology image detected - Ready for analysis"
+        else:
+            return None, "❌ **Status**: Invalid image - Please upload a valid histopathology image"
+    
+    # Connect image upload to validation
+    image_input.change(
+        fn=handle_image_upload,
+        inputs=[image_input],
+        outputs=[image_input, status_output]
+    )
+    
+    # Analysis button
+    submit_btn.click(
+        fn=analyze_image,
+        inputs=[image_input],
+        outputs=[results_output, visualization_output, status_output]
+    )
+    
+    # Clear button
+    clear_btn.click(
+        fn=clear_all,
+        inputs=[],
+        outputs=[image_input, results_output, visualization_output, status_output]
+    )
+    
+    # Sample gallery selection
+    if sample_images:
+        example_gallery.select(
+            fn=handle_sample_selection,
+            outputs=[image_input]
+        )
+
+# Launch the application
+if __name__ == "__main__":
+    print("\n" + "="*50)
+    print("🚀 LAUNCHING BREAST CANCER AI ANALYSIS SYSTEM")
+    print("="*50)
+    
+    if model_load_success:
+        print("✅ All systems operational")
+        print("🔗 Starting web interface...")
+        
+        demo.launch(
+            server_name="0.0.0.0",
+            server_port=7860,
+            share=False,  # Set to True if you want a public link
+            show_error=True,
+            quiet=False
+        )
+    else:
+        print("❌ System startup failed - Models not loaded")
+        print("🔧 Please check your configuration and try again")
