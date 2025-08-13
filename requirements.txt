@@ -6,3 +6,4 @@ Pillow>=9.5.0
 gradio>=3.35.0
 huggingface-hub>=0.15.0
 scikit-image>=0.20.0
+seaborn
