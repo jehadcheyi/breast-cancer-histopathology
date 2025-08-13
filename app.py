@@ -547,7 +547,5 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=7860,
         quiet=True,
-        show_tips=False,
-        enable_queue=True,
         max_threads=10
     )
