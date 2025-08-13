@@ -1,329 +1,392 @@
 import os
-import numpy as np
 import cv2
-import matplotlib.pyplot as plt
-from PIL import Image
+import numpy as np
 import tensorflow as tf
-from tensorflow.keras.models import load_model, Model
-from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from tensorflow import keras
+import matplotlib.pyplot as plt
+import seaborn as sns
 import gradio as gr
+from datetime import datetime
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import plotly.express as px
 from huggingface_hub import hf_hub_download
-from tensorflow.keras.models import load_model as keras_load_model
-import matplotlib.patches as patches
-from matplotlib.gridspec import GridSpec
+import warnings
+warnings.filterwarnings('ignore')
 
-# Hugging Face Hub configuration
-REPO_ID = "jehadcheyi/bc_models"
-HF_TOKEN = os.getenv("jehad")
+# Print startup message
+print("===== Application Startup at {} =====".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
 
-# Model paths
-model_paths = {
-    'binary': 'binary.h5',
-    'benign': 'benign.h5', 
-    'malignant': 'malignant.h5'
-}
+# Configure TensorFlow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+tf.get_logger().setLevel('ERROR')
 
-# Image and class definitions
-img_size = (128, 128)
-target_size = (224, 224)  # Increased for better visualization
+# Global variables for models
+binary_model = None
+benign_model = None
+malignant_model = None
+conv_layers = []
 
-classes = {
-    'binary': ['benign', 'malignant'],
-    'benign': ['A', 'F', 'PT', 'TA'],
-    'malignant': ['DC', 'LC', 'MC', 'PC'],
-    'benign_names': {'A': 'Adenosis', 'F': 'Fibroadenoma', 'PT': 'Phyllodes Tumor', 'TA': 'Tubular Adenoma'},
-    'malignant_names': {'DC': 'Ductal Carcinoma', 'LC': 'Lobular Carcinoma', 'MC': 'Mucinous Carcinoma', 'PC': 'Papillary Carcinoma'}
-}
-
-# Initialize models dictionary
-models = {}
-grad_model = None
-
-# Model Loading
-print("🔄 Initializing AI Models...")
-
-try:
-    # Load all models
-    for name, filename in model_paths.items():
-        local_path = hf_hub_download(
-            repo_id=REPO_ID,
-            filename=filename,
-            token=HF_TOKEN,
-            cache_dir="model_cache"
-        )
-        models[name] = keras_load_model(local_path)
-        print(f"✅ Successfully loaded {name} model")
+def load_models():
+    """Load all models with proper error handling"""
+    global binary_model, benign_model, malignant_model, conv_layers
     
-    # Enhanced Grad-CAM Setup
-    binary_model = models['binary']
+    print("🔄 Initializing AI Models...")
     
-    # Find the best convolutional layer for Grad-CAM
-    conv_layers = []
-    for i, layer in enumerate(binary_model.layers):
-        if isinstance(layer, (tf.keras.layers.Conv2D, tf.keras.layers.DepthwiseConv2D)):
-            conv_layers.append((i, layer.name, layer.output_shape))
-    
-    if conv_layers:
-        # Use the last conv layer with reasonable spatial dimensions
-        best_layer = None
-        for i, name, shape in reversed(conv_layers):
-            if len(shape) >= 3 and shape[1] >= 4 and shape[2] >= 4:  # At least 4x4 spatial
-                best_layer = name
-                break
-        
-        if best_layer is None:
-            best_layer = conv_layers[-1][1]  # Fallback to last conv layer
-        
-        print(f"🔬 Using layer '{best_layer}' for Grad-CAM")
-        
-        grad_model = Model(
-            inputs=binary_model.inputs,
-            outputs=[binary_model.get_layer(best_layer).output, binary_model.output]
-        )
-        print("✅ Enhanced Grad-CAM setup complete")
-    else:
-        print("⚠️ No suitable convolutional layers found")
-        
-except Exception as e:
-    print(f"❌ Model loading failed: {str(e)}")
-    raise
-
-print("🚀 All AI systems loaded successfully!")
-
-def prep_img(img):
-    """Enhanced image preprocessing"""
     try:
-        # Handle different input formats
-        if isinstance(img, str):
-            img = cv2.imread(img)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # Model files configuration
+        model_files = {
+            'binary': 'binary.h5',
+            'benign': 'benign.h5', 
+            'malignant': 'malignant.h5'
+        }
         
-        # Ensure proper format
-        if img.dtype != np.uint8:
-            if img.max() <= 1.0:
-                img = (img * 255).astype(np.uint8)
-            else:
-                img = np.clip(img, 0, 255).astype(np.uint8)
+        repo_id = "MohamedRaslan/Breast-Cancer-Classification"
         
-        # Convert to PIL and resize
-        img_pil = Image.fromarray(img)
-        img_resized = img_pil.resize(img_size, Image.Resampling.LANCZOS)
+        # Load binary classification model
+        try:
+            binary_path = hf_hub_download(repo_id=repo_id, filename=model_files['binary'])
+            binary_model = keras.models.load_model(binary_path, compile=False)
+            binary_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+            print("✅ Successfully loaded binary model")
+        except Exception as e:
+            print(f"❌ Failed to load binary model: {e}")
+            return False
         
-        # Convert to array and normalize
-        arr = img_to_array(img_resized) / 255.0
-        batch = np.expand_dims(arr, axis=0)
+        # Load benign subtype model
+        try:
+            benign_path = hf_hub_download(repo_id=repo_id, filename=model_files['benign'])
+            benign_model = keras.models.load_model(benign_path, compile=False)
+            benign_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+            print("✅ Successfully loaded benign model")
+        except Exception as e:
+            print(f"❌ Failed to load benign model: {e}")
+            return False
         
-        return batch, img
+        # Load malignant subtype model
+        try:
+            malignant_path = hf_hub_download(repo_id=repo_id, filename=model_files['malignant'])
+            malignant_model = keras.models.load_model(malignant_path, compile=False)
+            malignant_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+            print("✅ Successfully loaded malignant model")
+        except Exception as e:
+            print(f"❌ Failed to load malignant model: {e}")
+            return False
         
-    except Exception as e:
-        print(f"❌ Preprocessing error: {str(e)}")
-        raise
-
-def predict(img):
-    """Enhanced prediction with better error handling"""
-    try:
-        print("🔍 Starting prediction process...")
-        arr, original_img = prep_img(img)
-        
-        # Binary Classification
-        binary_pred = models['binary'].predict(arr, verbose=0)
-        pred_idx = np.argmax(binary_pred[0])
-        binary_conf = float(np.max(binary_pred[0]) * 100)
-        label = classes['binary'][pred_idx]
-        
-        # Subtype Classification
-        subtype_pred = models[label].predict(arr, verbose=0)
-        subtype_idx = np.argmax(subtype_pred[0])
-        subtype_conf = float(np.max(subtype_pred[0]) * 100)
-        subtype_code = classes[label][subtype_idx]
-        subtype_name = classes[f'{label}_names'][subtype_code]
-        
-        # Calculate all subtype probabilities
-        subtype_probs = {}
-        for code, prob in zip(classes[label], subtype_pred[0]):
-            subtype_probs[classes[f'{label}_names'][code]] = float(prob * 100)
+        # Extract convolutional layers for visualization (with proper error handling)
+        try:
+            # Build the model first with a sample input to initialize layer shapes
+            sample_input = np.random.random((1, 224, 224, 3)).astype(np.float32)
+            _ = binary_model(sample_input)  # This builds the model
             
-        return pred_idx, binary_conf, subtype_name, subtype_conf, subtype_probs, original_img
+            conv_layers = []
+            for i, layer in enumerate(binary_model.layers):
+                if 'conv' in layer.name.lower():
+                    try:
+                        # Now we can safely access output_shape
+                        output_shape = layer.output_shape if hasattr(layer, 'output_shape') else 'Unknown'
+                        conv_layers.append((i, layer.name, output_shape))
+                    except Exception as layer_error:
+                        print(f"⚠️ Warning: Could not get shape for layer {layer.name}: {layer_error}")
+                        conv_layers.append((i, layer.name, 'Unknown'))
+            
+            print(f"✅ Successfully identified {len(conv_layers)} convolutional layers")
+            
+        except Exception as e:
+            print(f"⚠️ Warning: Could not extract conv layers: {e}")
+            conv_layers = []  # Continue without conv layer info
+        
+        print("🎉 All models loaded successfully!")
+        return True
         
     except Exception as e:
-        print(f"❌ Prediction error: {str(e)}")
+        print(f"❌ Model loading failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+# Load models at startup
+models_loaded = load_models()
+
+if not models_loaded:
+    print("❌ CRITICAL ERROR: Models failed to load. Some features may not work.")
+else:
+    print("✅ SYSTEM READY: All models loaded successfully")
+
+# Class definitions
+CLASS_NAMES = ['Benign', 'Malignant']
+
+BENIGN_SUBTYPES = [
+    'Adenosis', 'Fibroadenoma', 'Phyllodes Tumor', 'Tubular Adenoma'
+]
+
+MALIGNANT_SUBTYPES = [
+    'Ductal Carcinoma', 'Lobular Carcinoma', 'Mucinous Carcinoma', 'Papillary Carcinoma'
+]
+
+# Enhanced preprocessing function
+def preprocess_image(image):
+    """Enhanced preprocessing with better error handling"""
+    try:
+        if image is None:
+            raise ValueError("No image provided")
+        
+        # Handle different input types
+        if isinstance(image, str):
+            # If it's a file path
+            img = cv2.imread(image)
+            if img is None:
+                raise ValueError(f"Could not load image from path: {image}")
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        else:
+            # If it's already a numpy array
+            img = image.copy()
+        
+        # Ensure the image is in the right format
+        if len(img.shape) != 3 or img.shape[2] != 3:
+            raise ValueError(f"Invalid image shape: {img.shape}. Expected (H, W, 3)")
+        
+        # Resize to model input size
+        img_resized = cv2.resize(img, (224, 224))
+        
+        # Normalize pixel values
+        img_normalized = img_resized.astype(np.float32) / 255.0
+        
+        # Add batch dimension
+        img_batch = np.expand_dims(img_normalized, axis=0)
+        
+        print(f"✅ Image preprocessed successfully: {img_batch.shape}")
+        return img_batch, img_resized
+        
+    except Exception as e:
+        print(f"❌ Preprocessing failed: {e}")
         raise
 
-def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None):
-    """Improved Grad-CAM implementation"""
+def create_gradcam_heatmap(model, img_array, class_index=None, layer_name=None):
+    """Create Grad-CAM heatmap with better error handling"""
     try:
+        if model is None:
+            print("⚠️ Model not available for Grad-CAM")
+            return None
+        
+        # Find the last convolutional layer if not specified
+        if layer_name is None:
+            for layer in reversed(model.layers):
+                if len(layer.output_shape) == 4:  # Conv layer
+                    layer_name = layer.name
+                    break
+        
+        if layer_name is None:
+            print("⚠️ No convolutional layer found for Grad-CAM")
+            return None
+        
         # Create a model that maps the input image to the activations of the last conv layer
-        # as well as the output predictions
-        grad_model = tf.keras.models.Model(
-            [model.inputs], [model.get_layer(last_conv_layer_name).output, model.output]
+        grad_model = keras.models.Model(
+            inputs=[model.inputs],
+            outputs=[model.get_layer(layer_name).output, model.output]
         )
-
+        
         # Compute the gradient of the top predicted class for our input image
-        # with respect to the activations of the last conv layer
         with tf.GradientTape() as tape:
-            last_conv_layer_output, preds = grad_model(img_array)
-            if pred_index is None:
-                pred_index = tf.argmax(preds[0])
-            class_channel = preds[:, pred_index]
-
-        # This is the gradient of the output neuron (top predicted or chosen)
-        # with regard to the output feature map of the last conv layer
-        grads = tape.gradient(class_channel, last_conv_layer_output)
-
-        # This is a vector where each entry is the mean intensity of the gradient
-        # over a specific feature map channel
+            conv_outputs, predictions = grad_model(img_array)
+            if class_index is None:
+                class_index = tf.argmax(predictions[0])
+            class_channel = predictions[:, class_index]
+        
+        # Gradient of the output neuron (top predicted or chosen)
+        grads = tape.gradient(class_channel, conv_outputs)
+        
+        # Mean intensity of the gradient over a specific feature map channel
         pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
-
-        # We multiply each channel in the feature map array
-        # by "how important this channel is" with regard to the top predicted class
-        # then sum all the channels to obtain the heatmap class activation
-        last_conv_layer_output = last_conv_layer_output[0]
-        heatmap = last_conv_layer_output @ pooled_grads[..., tf.newaxis]
+        
+        # Multiply each channel in the feature map array by "how important this channel is"
+        conv_outputs = conv_outputs[0]
+        heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
         heatmap = tf.squeeze(heatmap)
-
-        # For visualization purpose, we will also normalize the heatmap between 0 & 1
+        
+        # Normalize the heatmap
         heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
+        
         return heatmap.numpy()
-    
+        
     except Exception as e:
-        print(f"❌ Grad-CAM error: {str(e)}")
+        print(f"⚠️ Grad-CAM generation failed: {e}")
         return None
 
-def create_enhanced_visualization(img, pred_idx, binary_conf, label, subtype_name, subtype_conf):
-    """Create a more practical and beautiful visualization"""
+def create_enhanced_visualization(original_img, prediction_idx, confidence, diagnosis, subtype_name, subtype_conf):
+    """Create comprehensive visualization with multiple plots"""
     try:
-        print("🎨 Creating enhanced visualization...")
-        
-        # Prepare image
-        if img.dtype != np.uint8:
-            if img.max() <= 1.0:
-                img = (img * 255).astype(np.uint8)
-            else:
-                img = np.clip(img, 0, 255).astype(np.uint8)
-        
-        # Create figure with custom layout
-        fig = plt.figure(figsize=(16, 10), facecolor='white')
-        gs = GridSpec(3, 4, figure=fig, hspace=0.3, wspace=0.3)
-        
-        # Main title
-        diagnosis = label.upper()
-        color = '#2E8B57' if diagnosis == 'BENIGN' else '#DC143C'
-        emoji = '🟢' if diagnosis == 'BENIGN' else '🔴'
-        
-        fig.suptitle(
-            f'{emoji} AI Diagnosis: {diagnosis} | تشخيص الذكاء الاصطناعي | تەشخیسا زیرەکیا دەستکرد\n'
-            f'Confidence: {binary_conf:.1f}% | Subtype: {subtype_name} ({subtype_conf:.1f}%)',
-            fontsize=16, fontweight='bold', color=color, y=0.95
+        # Create subplots
+        fig = make_subplots(
+            rows=2, cols=3,
+            subplot_titles=[
+                "Original Image", "AI Attention Heatmap", "Confidence Distribution",
+                "Binary Classification", "Subtype Analysis", "Risk Assessment"
+            ],
+            specs=[
+                [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
+                [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}]
+            ],
+            horizontal_spacing=0.08,
+            vertical_spacing=0.12
         )
         
-        # Original image (large)
-        ax1 = fig.add_subplot(gs[:2, :2])
-        resized_img = cv2.resize(img, target_size)
-        ax1.imshow(resized_img)
-        ax1.set_title('🔬 Original Tissue Sample\nالعينة النسيجية الأصلية\nنموونەیا ئەسلی', 
-                     fontsize=12, fontweight='bold', pad=10)
-        ax1.axis('off')
+        # 1. Original Image
+        fig.add_trace(
+            go.Image(z=original_img),
+            row=1, col=1
+        )
         
-        # Generate heatmap if possible
-        heatmap = None
-        if grad_model is not None:
-            try:
-                arr, _ = prep_img(img)
+        # 2. Generate and display heatmap
+        try:
+            if binary_model is not None:
+                img_array, _ = preprocess_image(original_img)
+                heatmap = create_gradcam_heatmap(binary_model, img_array, prediction_idx)
                 
-                # Find the last conv layer name
-                conv_layer_name = None
-                for layer in reversed(models['binary'].layers):
-                    if isinstance(layer, (tf.keras.layers.Conv2D, tf.keras.layers.DepthwiseConv2D)):
-                        conv_layer_name = layer.name
-                        break
-                
-                if conv_layer_name:
-                    heatmap = make_gradcam_heatmap(arr, models['binary'], conv_layer_name, pred_idx)
+                if heatmap is not None:
+                    # Resize heatmap to match original image
+                    heatmap_resized = cv2.resize(heatmap, (original_img.shape[1], original_img.shape[0]))
                     
-            except Exception as e:
-                print(f"⚠️ Heatmap generation failed: {e}")
+                    fig.add_trace(
+                        go.Heatmap(
+                            z=heatmap_resized,
+                            colorscale='Jet',
+                            showscale=True,
+                            colorbar=dict(title="Attention", x=0.65)
+                        ),
+                        row=1, col=2
+                    )
+                else:
+                    # Fallback: show original image
+                    fig.add_trace(go.Image(z=original_img), row=1, col=2)
+            else:
+                fig.add_trace(go.Image(z=original_img), row=1, col=2)
+        except Exception as e:
+            print(f"⚠️ Heatmap generation failed: {e}")
+            fig.add_trace(go.Image(z=original_img), row=1, col=2)
         
-        # Heatmap visualization
-        ax2 = fig.add_subplot(gs[:2, 2:])
-        if heatmap is not None:
-            # Resize heatmap to match image
-            heatmap_resized = cv2.resize(heatmap, target_size)
+        # 3. Confidence Distribution
+        conf_data = [confidence, 100-confidence]
+        conf_labels = [diagnosis, "Other"]
+        colors = ['#e74c3c', '#2ecc71'] if prediction_idx == 1 else ['#2ecc71', '#e74c3c']
+        
+        fig.add_trace(
+            go.Bar(
+                x=conf_labels,
+                y=conf_data,
+                marker_color=colors,
+                text=[f"{c:.1f}%" for c in conf_data],
+                textposition='auto',
+                name="Confidence"
+            ),
+            row=1, col=3
+        )
+        
+        # 4. Binary Classification Pie Chart
+        fig.add_trace(
+            go.Pie(
+                labels=CLASS_NAMES,
+                values=[100-confidence if prediction_idx == 1 else confidence, 
+                       confidence if prediction_idx == 1 else 100-confidence],
+                marker_colors=['#2ecc71', '#e74c3c'],
+                textinfo='label+percent',
+                name="Binary Classification"
+            ),
+            row=2, col=1
+        )
+        
+        # 5. Subtype Analysis
+        if subtype_name != "N/A":
+            subtype_data = [subtype_conf, 100-subtype_conf]
+            subtype_labels = [subtype_name, "Other Subtypes"]
             
-            # Create overlay
-            heatmap_colored = plt.cm.jet(heatmap_resized)[:, :, :3]
-            overlay = 0.6 * resized_img/255.0 + 0.4 * heatmap_colored
-            overlay = np.clip(overlay, 0, 1)
-            
-            ax2.imshow(overlay)
-            ax2.set_title('🌡️ AI Attention Heatmap\nخريطة انتباه الذكاء الاصطناعي\nنەخشەیا گرنگیدانا زیرەکیا دەستکرد', 
-                         fontsize=12, fontweight='bold', pad=10)
+            fig.add_trace(
+                go.Bar(
+                    x=subtype_labels,
+                    y=subtype_data,
+                    marker_color=['#3498db', '#95a5a6'],
+                    text=[f"{c:.1f}%" for c in subtype_data],
+                    textposition='auto',
+                    name="Subtype"
+                ),
+                row=2, col=2
+            )
         else:
-            ax2.imshow(resized_img)
-            ax2.text(0.5, 0.5, 'Heatmap\nUnavailable\nخريطة الحرارة\nغير متاحة', 
-                    ha='center', va='center', transform=ax2.transAxes,
-                    fontsize=14, bbox=dict(boxstyle="round,pad=0.3", facecolor="yellow", alpha=0.7))
-            ax2.set_title('🌡️ AI Attention Analysis\nتحليل انتباه الذكاء الاصطناعي\nشلوڤەکرنا گرنگیدانا زیرەکیا دەستکرد', 
-                         fontsize=12, fontweight='bold', pad=10)
-        ax2.axis('off')
+            fig.add_annotation(
+                text="No subtype analysis<br>available",
+                x=0.5, y=0.5,
+                xref="x5", yref="y5",
+                showarrow=False,
+                font=dict(size=14, color="gray")
+            )
         
-        # Confidence meters
-        ax3 = fig.add_subplot(gs[2, 0])
-        ax3.pie([binary_conf, 100-binary_conf], 
-                colors=[color, '#E0E0E0'], 
-                startangle=90,
-                counterclock=False,
-                wedgeprops=dict(width=0.3))
-        ax3.set_title(f'Primary\nConfidence\n{binary_conf:.1f}%\nالثقة الأساسية\nباوەڕی سەرەکی', 
-                     fontsize=10, fontweight='bold')
+        # 6. Risk Assessment Gauge
+        risk_score = confidence if prediction_idx == 1 else 100 - confidence
+        risk_color = '#e74c3c' if risk_score > 70 else '#f39c12' if risk_score > 40 else '#2ecc71'
         
-        # Subtype confidence
-        ax4 = fig.add_subplot(gs[2, 1])
-        subtype_color = '#4169E1'
-        ax4.pie([subtype_conf, 100-subtype_conf], 
-                colors=[subtype_color, '#E0E0E0'], 
-                startangle=90,
-                counterclock=False,
-                wedgeprops=dict(width=0.3))
-        ax4.set_title(f'Subtype\nConfidence\n{subtype_conf:.1f}%\nثقة النوع الفرعي\nباوەڕی جۆرێ لاوەکی', 
-                     fontsize=10, fontweight='bold')
+        fig.add_trace(
+            go.Indicator(
+                mode="gauge+number+delta",
+                value=risk_score,
+                domain={'x': [0, 1], 'y': [0, 1]},
+                title={'text': "Risk Level"},
+                gauge={
+                    'axis': {'range': [None, 100]},
+                    'bar': {'color': risk_color},
+                    'steps': [
+                        {'range': [0, 40], 'color': "lightgray"},
+                        {'range': [40, 70], 'color': "gray"},
+                        {'range': [70, 100], 'color': "darkgray"}
+                    ],
+                    'threshold': {
+                        'line': {'color': "red", 'width': 4},
+                        'thickness': 0.75,
+                        'value': 90
+                    }
+                }
+            ),
+            row=2, col=3
+        )
         
-        # Risk assessment
-        ax5 = fig.add_subplot(gs[2, 2:])
-        risk_level = "LOW RISK" if diagnosis == "BENIGN" else "HIGH RISK"
-        risk_color = '#2E8B57' if diagnosis == "BENIGN" else '#DC143C'
+        # Update layout
+        fig.update_layout(
+            title=dict(
+                text=f"🔬 AI Histopathology Analysis: {diagnosis}",
+                x=0.5,
+                font=dict(size=20, color="#2c3e50")
+            ),
+            height=800,
+            showlegend=False,
+            plot_bgcolor='rgba(248,249,250,0.8)',
+            paper_bgcolor='white',
+            font=dict(family="Arial, sans-serif", size=12)
+        )
         
-        ax5.text(0.5, 0.7, f'Risk Assessment\nتقييم المخاطر\nهەڵسەنگاندنا مەترسیان', 
-                ha='center', va='center', fontsize=12, fontweight='bold')
-        ax5.text(0.5, 0.3, risk_level, 
-                ha='center', va='center', fontsize=16, fontweight='bold', 
-                color=risk_color,
-                bbox=dict(boxstyle="round,pad=0.5", facecolor=risk_color, alpha=0.2))
-        ax5.set_xlim(0, 1)
-        ax5.set_ylim(0, 1)
-        ax5.axis('off')
+        # Remove axes for image plots
+        fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False, row=1, col=1)
+        fig.update_yaxes(showticklabels=False, showgrid=False, zeroline=False, row=1, col=1)
+        fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False, row=1, col=2)
+        fig.update_yaxes(showticklabels=False, showgrid=False, zeroline=False, row=1, col=2)
         
-        # Add legend for heatmap
-        if heatmap is not None:
-            legend_elements = [
-                plt.Rectangle((0,0),1,1, facecolor='red', alpha=0.7, label='High Attention | انتباه عالي | گرنگیدانا بەرز'),
-                plt.Rectangle((0,0),1,1, facecolor='yellow', alpha=0.7, label='Medium | متوسط | ناڤەند'),
-                plt.Rectangle((0,0),1,1, facecolor='blue', alpha=0.7, label='Low | منخفض | نزم')
-            ]
-            fig.legend(handles=legend_elements, loc='lower center', ncol=3, 
-                      bbox_to_anchor=(0.5, 0.02), fontsize=10)
-        
-        plt.tight_layout()
         return fig
         
     except Exception as e:
-        print(f"❌ Visualization error: {str(e)}")
-        # Return simple error figure
-        fig, ax = plt.subplots(1, 1, figsize=(10, 6))
-        ax.text(0.5, 0.5, f'Visualization Error\nخطأ في التصور\nهەڵەیا دیمەنکرنێ\n\n{str(e)}', 
-                ha='center', va='center', transform=ax.transAxes, fontsize=14,
-                bbox=dict(boxstyle="round,pad=0.5", facecolor="red", alpha=0.2))
-        ax.axis('off')
+        print(f"❌ Visualization creation failed: {e}")
+        # Return a simple fallback plot
+        fig = go.Figure()
+        fig.add_annotation(
+            text=f"Visualization Error: {str(e)}",
+            x=0.5, y=0.5,
+            showarrow=False,
+            font=dict(size=16, color="red")
+        )
+        fig.update_layout(
+            title="Visualization Error",
+            height=400,
+            plot_bgcolor='white'
+        )
         return fig
+
 
 def analyze_image(input_img):
     """Main analysis function with enhanced error handling"""
