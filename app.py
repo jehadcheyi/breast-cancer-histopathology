@@ -551,8 +551,8 @@ title = "🏥 Advanced Histopathology Analysis System"
 
 description = """
 <div style="text-align: center; padding: 25px;">
-    <h1 style="color: #2c3e50; margin-bottom: 20px; font-size: 2.8em; text-shadow: 2px 2px 4px rgba(0,0,0,0.1);">
-        🔬 Revolutionary AI-Powered Cancer Detection Platform
+    <h1 style="color: #2980b9; margin-bottom: 20px; font-size: 2 em; text-shadow: 2px 2px 4px rgba(0,0,0,0.1);">
+        🔬 پروگرامێ دەستنیشانکرنا شێرپەنجا مەمکان برێکا وێنێن هستوپاسولوجی
     </h1>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 30px 0;">
         <div style="background: linear-gradient(45deg, #4CAF50, #45a049); color: white; padding: 20px; border-radius: 15px;">
