@@ -1300,7 +1300,7 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="BREAST AI PRO - En
                 None, None, None, None, None,
                 "🔴 **Status**: No Image - Please upload a histopathology image"
             )
-        return enhanced_analyze_image(image)
+        return analyze_image(image)
 
     def handle_clear():
         return (
