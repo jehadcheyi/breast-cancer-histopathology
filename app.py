@@ -204,53 +204,200 @@ def predict(img):
         raise
 
 # ---------- Grad-CAM heatmap generation ----------
+
 def make_heatmap(img, pred_idx):
-    """Generate Grad-CAM heatmap. Accepts image in RGB numpy format."""
+    """Robust Grad-CAM heatmap generator.
+    - Handles binary models with single-output sigmoid or two-output softmax.
+    - Uses element-wise multiply + reduce_sum (stable).
+    - Applies smoothing and contrast normalization so 'heat' is visible.
+    Returns BGR heatmap uint8 with shape target_size + (3,).
+    """
     try:
-        # Prepare input for grad_model (use same preprocessing shape as prediction)
-        arr = prep_img(img)  # shape (1, H, W, 3)
+        # Prepare model input
+        arr = prep_img(img)  # (1, H, W, 3)
 
         with tf.GradientTape() as tape:
+            # Watch the conv output
             conv_out, preds = grad_model(arr)
-            loss = preds[:, pred_idx]
+            # Handle different output shapes:
+            # - If preds has shape (1,1) -> single sigmoid: interpret pred_idx via classes['binary']
+            # - If preds has shape (1,2+) -> multi-class: use preds[:, pred_idx]
+            if preds.shape[-1] == 1:
+                # single-output sigmoid: choose loss to emphasize desired class
+                # If pred_idx corresponds to 'malignant' (index 1) use preds[:,0],
+                # otherwise use (1 - preds[:,0]) to focus on benign evidence.
+                target_label = classes['binary'][pred_idx]
+                if target_label == 'malignant':
+                    loss = preds[:, 0]
+                else:
+                    loss = 1.0 - preds[:, 0]
+            else:
+                # multi-class output (softmax)
+                loss = preds[:, pred_idx]
 
+        # Compute gradients of loss w.r.t conv outputs
         grads = tape.gradient(loss, conv_out)
         if grads is None:
-            # Gradient failed, return zero heatmap
             if DEBUG:
-                print("make_heatmap -> gradients are None")
+                print("make_heatmap: grads is None")
             return np.zeros((*target_size, 3), dtype=np.uint8)
 
-        grads = grads[0]  # (h, w, channels)
+        # Take first (and only) sample in batch
+        grads = grads[0]        # (h, w, channels)
         conv_out = conv_out[0]  # (h, w, channels)
 
-        pooled = tf.reduce_mean(grads, axis=(0, 1))
-        # Weighted sum of convolution outputs and pooled gradients
-        heatmap = tf.reduce_sum(conv_out * pooled, axis=-1)
+        # Global-average-pool the gradients to obtain importance for each channel
+        pooled_grads = tf.reduce_mean(grads, axis=(0, 1))  # (channels,)
 
-        # ReLU
+        # Weighted sum of feature maps
+        heatmap = tf.reduce_sum(conv_out * pooled_grads, axis=-1)  # (h, w)
+
+        # ReLU (keep only positive influence)
         heatmap = tf.maximum(heatmap, 0)
-        max_val = tf.math.reduce_max(heatmap)
-        if max_val == 0 or tf.math.is_nan(max_val):
-            # Avoid division by zero
-            if DEBUG:
-                print("make_heatmap -> heatmap max is zero or NaN, returning empty heatmap")
-            return np.zeros((*target_size, 3), dtype=np.uint8)
 
+        # Normalize safely (avoid division by zero)
+        max_val = tf.reduce_max(heatmap)
+        if max_val is None or max_val.numpy() <= 1e-8:
+            if DEBUG:
+                print("make_heatmap: heatmap max is zero or tiny -> returning empty map")
+            return np.zeros((*target_size, 3), dtype=np.uint8)
         heatmap = heatmap / max_val
-        heatmap = heatmap.numpy()
+
+        # Convert to numpy and resize to display size
+        heatmap = heatmap.numpy().astype(np.float32)
         heatmap_resized = cv2.resize(heatmap, target_size, interpolation=cv2.INTER_LINEAR)
 
-        # Convert to color map (OpenCV expects uint8)
+        # Smooth to produce larger attention blobs (more visible)
+        heatmap_resized = cv2.GaussianBlur(heatmap_resized, (7, 7), 0)
+
+        # Normalize to [0,255] uint8 (contrast stretch)
         heatmap_uint8 = np.uint8(255 * heatmap_resized)
-        colored = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)  # BGR
+        heatmap_uint8 = cv2.normalize(heatmap_uint8, None, 0, 255, cv2.NORM_MINMAX)
+
+        # Apply colormap (OpenCV gives BGR)
+        colored = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
+
+        # Optional: increase intensity by blending the color map with itself
+        # This visually boosts "hot" areas — comment out if too strong.
+        colored = cv2.addWeighted(colored, 1.2, np.zeros_like(colored), 0, 0)
+        colored = np.clip(colored, 0, 255).astype(np.uint8)
+
         return colored
+
     except Exception as e:
-        print(f"Error generating heatmap: {e}")
-        # Return empty heatmap on error to avoid crashing UI
+        print(f"make_heatmap error: {e}")
+        # Return an empty heatmap so UI doesn't crash
         return np.zeros((*target_size, 3), dtype=np.uint8)
 
-# ---------- Cropping helper ----------
+
+def create_visualization(img, pred_idx, binary_conf, label, subtype_conf, zooms=[75, 50, 25]):
+    """Visualization kept same as original but uses the robust make_heatmap.
+    Small tweak: overlay uses a stronger heatmap alpha when heatmap contains signal.
+    """
+    try:
+        # Ensure input is uint8 RGB
+        if img.dtype != np.uint8:
+            img = (img * 255).astype(np.uint8) if img.max() <= 1.0 else img.astype(np.uint8)
+
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        h, w = img.shape[:2]
+        levels = 1 + len(zooms)
+
+        fig, axs = plt.subplots(levels, 3, figsize=(18, 6 * levels), dpi=100)
+        if levels == 1:
+            axs = np.expand_dims(axs, axis=0)
+
+        # Full image analysis
+        resized = cv2.resize(img, target_size)
+        heatmap = make_heatmap(cv2.cvtColor(resized, cv2.COLOR_BGR2RGB), pred_idx)
+
+        # If heatmap is blank (all zeros) use weaker overlay; otherwise stronger
+        if heatmap.sum() == 0:
+            overlay = cv2.addWeighted(resized, 0.75, heatmap, 0.25, 0)
+        else:
+            overlay = cv2.addWeighted(resized, 0.55, heatmap, 0.45, 0)
+
+        # Convert back to RGB for display
+        resized_rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+        overlay_rgb = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
+
+        axs[0][0].imshow(resized_rgb)
+        axs[0][0].set_title("🔬 Original Tissue Sample\n(Full View)", fontsize=14, pad=15, fontweight='bold')
+        axs[0][0].axis('off')
+
+        axs[0][1].imshow(heatmap_rgb)
+        axs[0][1].set_title("🌡️ AI Attention Heatmap\n(Red = High Importance)", fontsize=14, pad=15, fontweight='bold')
+        axs[0][1].axis('off')
+
+        axs[0][2].imshow(overlay_rgb)
+        axs[0][2].set_title("🎯 Combined Analysis\n(AI Focus Areas)", fontsize=14, pad=15, fontweight='bold')
+        axs[0][2].axis('off')
+
+        # Zoomed analysis
+        for i, zoom in enumerate(zooms):
+            x1, y1, x2, y2 = get_crop_box(img.shape, zoom)
+            crop = img[y1:y2, x1:x2]
+
+            # If crop is empty (degenerate), fallback to centered crop
+            if crop.size == 0:
+                h0, w0 = img.shape[:2]
+                x1, y1, x2, y2 = w0//4, h0//4, w0*3//4, h0*3//4
+                crop = img[y1:y2, x1:x2]
+
+            resized_crop = cv2.resize(crop, target_size)
+            crop_heat = make_heatmap(cv2.cvtColor(resized_crop, cv2.COLOR_BGR2RGB), pred_idx)
+            crop_over = cv2.addWeighted(resized_crop, 0.55, crop_heat, 0.45, 0)
+
+            mask = np.zeros((h, w), dtype=np.uint8)
+            mask[y1:y2, x1:x2] = 1
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+            highlight = np.where(mask[..., None], img, gray_rgb)
+            cv2.rectangle(highlight, (x1, y1), (x2, y2), (255, 0, 0), 3)
+
+            # Convert to RGB for display
+            highlight_rgb = cv2.cvtColor(highlight, cv2.COLOR_BGR2RGB)
+            resized_crop_rgb = cv2.cvtColor(resized_crop, cv2.COLOR_BGR2RGB)
+            crop_heat_rgb = cv2.cvtColor(crop_heat, cv2.COLOR_BGR2RGB)
+            crop_over_rgb = cv2.cvtColor(crop_over, cv2.COLOR_BGR2RGB)
+
+            axs[i+1][0].imshow(highlight_rgb)
+            axs[i+1][0].set_title(f"🔍 Analysis Region: {zoom}%\n(Blue box shows zoom area)", fontsize=12, pad=10)
+            axs[i+1][0].axis('off')
+
+            axs[i+1][1].imshow(crop_heat_rgb)
+            axs[i+1][1].set_title(f"🌡️ Detailed Heatmap\n({zoom}% scale analysis)", fontsize=12, pad=10)
+            axs[i+1][1].axis('off')
+
+            axs[i+1][2].imshow(crop_over_rgb)
+            axs[i+1][2].set_title(f"🎯 Focused Analysis\n({zoom}% scale overlay)", fontsize=12, pad=10)
+            axs[i+1][2].axis('off')
+
+        diagnosis = classes['binary'][pred_idx].upper()
+        color = '#4CAF50' if diagnosis == 'BENIGN' else '#F44336'
+
+        plt.suptitle(
+            f"🏥 ADVANCED HISTOPATHOLOGY AI ANALYSIS\n\n"
+            f"🎯 Primary Diagnosis: {diagnosis} ({binary_conf:.1f}% confidence)\n"
+            f"🔬 Multi-Scale Attention Visualization System",
+            fontsize=18,
+            y=0.98,
+            color=color,
+            fontweight='bold'
+        )
+
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.90)
+        return fig
+
+    except Exception as e:
+        print(f"create_visualization error: {e}")
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+        ax.text(0.5, 0.5, f"Visualization Error\n{str(e)}", ha='center', va='center', transform=ax.transAxes)
+        ax.axis('off')
+        return fig
+        
 def get_crop_box(shape, percent):
     """Calculate centered crop box coordinates"""
     h, w = shape[:2]
