@@ -16,7 +16,7 @@ from tensorflow.keras.models import Model
 
 # Hugging Face Hub configuration
 REPO_ID = "jehadcheyi/bc_models"
-HF_TOKEN = os.getenv("jehad")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 # Model paths
 model_paths = {
