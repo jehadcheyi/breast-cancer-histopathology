@@ -1,5 +1,5 @@
 ---
-title: Breast AI PRO - Histopathology Classifier
+title: Breast AI PRO - Histopathology Classifier V2
 emoji: 🧠
 colorFrom: pink
 colorTo: red
