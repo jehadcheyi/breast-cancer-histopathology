@@ -1405,7 +1405,6 @@ if __name__ == "__main__":
         server_port=7860,
         share=True,
         show_error=True,
-        show_tips=True,
         enable_queue=True,
         max_threads=10,
         favicon_path=None,
