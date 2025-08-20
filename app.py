@@ -631,7 +631,7 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title=title) as demo:
                 gr.Markdown("### 🗺️ Tile Heatmap Overlay")
                 tile_overlay_output = gr.Image(label="Tile Heatmap Overlay (RGB)", type="numpy")
                 gr.Markdown("### 🔎 Top Suspicious Tiles")
-                top_tiles_gallery = gr.Gallery(label="Top tiles (highest malignant probability)").style(grid=[3], height="auto")
+                top_tiles_gallery = gr.Gallery(label="Top tiles (highest malignant probability)").scale(grid=[3], height="auto")
                 gr.HTML('</div>')
 
     # Event handlers
