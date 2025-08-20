@@ -602,7 +602,7 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title=title) as demo:
             with gr.Group():
                 gr.HTML('<div class="analysis-card">')
                 gr.Markdown("### 📤 Upload Histopathology Image")
-                image_input = gr.Image(label="Histopathology Image (RGB)", type="numpy", height=360, source="upload")
+                image_input = gr.Image(label="Histopathology Image (RGB)", type="numpy", height=360)
                 gr.Markdown("### ⚙️ Visualization Options")
                 with gr.Row():
                     use_sg = gr.Checkbox(label="Use SmoothGrad (smoother Grad-CAM)", value=False)
