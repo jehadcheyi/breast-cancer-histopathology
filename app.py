@@ -83,6 +83,140 @@ except Exception as e:
     print(f"❌ Model loading failed: {str(e)}")
     raise
 
+# Paste these functions into your app.py (after models are loaded)
+import tensorflow as tf
+import numpy as np
+import cv2
+
+# Global debug flag - set True to print diagnostics
+DEBUG = False
+
+def find_best_conv_layer(model):
+    """
+    Return name of conv2D layer with largest spatial dimensions (h*w).
+    If none found, return None.
+    """
+    best_name = None
+    best_size = 0
+    for layer in model.layers:
+        # Only consider Conv2D layers and layers with known output shape
+        if isinstance(layer, tf.keras.layers.Conv2D):
+            try:
+                shape = layer.output_shape  # (None, h, w, c) or similar
+                if shape and len(shape) >= 3 and shape[1] is not None and shape[2] is not None:
+                    size = int(shape[1]) * int(shape[2])
+                    if size > best_size:
+                        best_size = size
+                        best_name = layer.name
+            except Exception:
+                # Some layers may not expose output_shape; skip them
+                continue
+    return best_name
+
+def select_conv_layer_and_update_gradcam(layer_name=None):
+    """
+    Choose a conv layer (or use layer_name if provided) and rebuild the global grad_model.
+    Call this after your models['binary'] is available.
+    """
+    global grad_model
+    try:
+        binary_model = models['binary']
+    except Exception as e:
+        raise RuntimeError("models['binary'] not found. Load models before calling this.") from e
+
+    if layer_name is None:
+        layer_name = find_best_conv_layer(binary_model)
+        if DEBUG:
+            print("Auto-selected conv layer:", layer_name)
+
+    if layer_name is None:
+        raise ValueError("No suitable Conv2D layer found in binary model.")
+
+    grad_model = tf.keras.models.Model(
+        inputs=binary_model.inputs,
+        outputs=[binary_model.get_layer(layer_name).output, binary_model.output]
+    )
+    if DEBUG:
+        print(f"grad_model rebuilt using conv layer: {layer_name}")
+    return layer_name
+
+def make_heatmap_debug(img, pred_idx):
+    """
+    Improved Grad-CAM + diagnostics.
+    Returns BGR uint8 heatmap of shape target_size + (3,).
+    Prints diagnostics if DEBUG True.
+    """
+    try:
+        arr = prep_img(img)  # you already have this function
+        # Forward & gradients
+        with tf.GradientTape() as tape:
+            conv_out, preds = grad_model(arr)
+            # Handle single-logit (sigmoid) or multi-logit outputs
+            if preds.shape[-1] == 1:
+                # single sigmoid: interpret pred_idx relative to classes['binary']
+                target_label = classes['binary'][pred_idx]
+                if target_label == 'malignant':
+                    loss = preds[:, 0]
+                else:
+                    loss = 1.0 - preds[:, 0]
+            else:
+                loss = preds[:, pred_idx]
+
+        grads = tape.gradient(loss, conv_out)
+        if grads is None:
+            if DEBUG:
+                print("DEBUG: gradients is None")
+            return np.zeros((*target_size, 3), dtype=np.uint8)
+
+        # squeeze batch
+        grads = grads[0]        # (h, w, channels)
+        conv_out = conv_out[0]  # (h, w, channels)
+
+        # diagnostics
+        if DEBUG:
+            print("DEBUG: preds.shape", preds.shape, "preds:", preds.numpy())
+            print("DEBUG: conv_out.shape", conv_out.shape, "grads.shape", grads.shape)
+
+        pooled_grads = tf.reduce_mean(grads, axis=(0, 1))  # (channels,)
+        if DEBUG:
+            print("DEBUG: pooled_grads max/min:", tf.reduce_max(pooled_grads).numpy(), tf.reduce_min(pooled_grads).numpy())
+
+        # Weighted combination
+        heatmap = tf.reduce_sum(conv_out * pooled_grads, axis=-1)  # (h, w)
+        heatmap = tf.maximum(heatmap, 0)
+
+        # Normalize safely
+        max_val = tf.reduce_max(heatmap)
+        if DEBUG:
+            print("DEBUG: heatmap raw max:", None if max_val is None else float(max_val.numpy()))
+
+        if max_val is None or float(max_val.numpy()) <= 1e-8:
+            if DEBUG:
+                print("DEBUG: heatmap max too small, returning empty heatmap")
+            return np.zeros((*target_size, 3), dtype=np.uint8)
+
+        heatmap = heatmap / max_val
+        heatmap_np = heatmap.numpy().astype(np.float32)
+        # Resize and smooth
+        heatmap_resized = cv2.resize(heatmap_np, target_size, interpolation=cv2.INTER_LINEAR)
+        heatmap_resized = cv2.GaussianBlur(heatmap_resized, (7, 7), 0)
+
+        # Stretch contrast and convert to uint8
+        heatmap_uint8 = np.uint8(255 * heatmap_resized)
+        heatmap_uint8 = cv2.normalize(heatmap_uint8, None, 0, 255, cv2.NORM_MINMAX)
+        colored = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
+
+        # Boost intensity slightly
+        colored = cv2.convertScaleAbs(colored, alpha=1.2, beta=0)
+        return colored
+
+    except Exception as e:
+        if DEBUG:
+            import traceback
+            traceback.print_exc()
+        print(f"make_heatmap_debug error: {e}")
+        return np.zeros((*target_size, 3), dtype=np.uint8)
+
 # 3. Grad-CAM Setup
 print("\n🔬 Setting up Grad-CAM visualization...")
 try:
