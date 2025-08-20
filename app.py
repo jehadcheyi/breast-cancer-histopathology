@@ -102,9 +102,19 @@ except Exception as e:
 print("\n🚀 All AI systems loaded successfully!")
 
 def prep_img(img):
-    img = Image.fromarray(img)
-    img = img.resize(img_size)
-    arr = img_to_array(img) / 255.0
+    """More robust image preprocessing"""
+    if isinstance(img, np.ndarray):
+        pil_img = Image.fromarray(img)
+    else:
+        pil_img = Image.fromarray(np.array(img))
+    
+    pil_img = pil_img.resize(img_size)
+    
+    # Convert to RGB if needed
+    if pil_img.mode != 'RGB':
+        pil_img = pil_img.convert('RGB')
+    
+    arr = img_to_array(pil_img) / 255.0
     return np.expand_dims(arr, axis=0)
 
 def predict(img):
@@ -259,7 +269,7 @@ def create_visualization(img, pred_idx, binary_conf, label, subtype_conf, zooms=
 
 def analyze_image(input_img):
     if input_img is None:
-        return """
+        return """ 
         <div style="background: linear-gradient(45deg, #FFA726, #FF7043); color: white; padding: 25px; border-radius: 15px; text-align: center; margin: 20px 0;">
             <h2 style="margin: 0; font-size: 1.5em;">⚠️ No Image Provided</h2>
             <p style="margin: 10px 0; font-size: 1.1em;">Please upload a histopathology image to begin AI analysis</p>
@@ -268,11 +278,25 @@ def analyze_image(input_img):
             </div>
         </div>
         """, None, "🟡 **Status**: Waiting for Image Upload"
-
+    
     try:
-        img = input_img.astype('uint8')
+        # Convert and ensure proper image format
+        if isinstance(input_img, np.ndarray):
+            img = input_img.astype('uint8')
+        else:
+            # Handle PIL Image or other formats
+            img = np.array(input_img).astype('uint8')
+        
+        # Ensure 3 channels (convert grayscale to RGB)
+        if len(img.shape) == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+        elif img.shape[2] == 4:  # RGBA to RGB
+            img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+        elif img.shape[2] == 1:  # Single channel to RGB
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+        
+        # Make prediction
         pred_idx, binary_conf, subtype, subtype_conf, subtype_probs = predict(img)
-
         label = classes['binary'][pred_idx]
         diagnosis = label.upper()
         diagnosis_color = "#4CAF50" if diagnosis == "BENIGN" else "#F44336"
@@ -297,7 +321,7 @@ def analyze_image(input_img):
             • Discuss treatment options with medical team
             • Seek second opinion if needed
             """
-
+        
         # Enhanced subtype table with progress bars
         subtype_table = """
         <div style='background: #f8f9fa; padding: 20px; border-radius: 12px; margin: 15px 0;'>
@@ -313,31 +337,30 @@ def analyze_image(input_img):
         for name, prob in sorted(subtype_probs.items(), key=lambda x: x[1], reverse=True):
             bar_width = int(prob)
             bar_color = "#4CAF50" if prob < 30 else "#FF9800" if prob < 70 else "#F44336"
-            
             subtype_table += f"""
-            <tr style='border-bottom: 1px solid #e0e0e0;'>
-                <td style='padding: 12px; font-weight: bold;'>{name}</td>
-                <td style='padding: 12px; text-align: center; font-weight: bold; color: {bar_color};'>{prob:.1f}%</td>
-                <td style='padding: 12px; text-align: center;'>
-                    <div style='background: #e0e0e0; border-radius: 10px; height: 20px; width: 100px; margin: 0 auto; position: relative;'>
-                        <div style='background: {bar_color}; height: 100%; width: {bar_width}%; border-radius: 10px; transition: all 0.3s ease;'></div>
-                    </div>
-                </td>
-            </tr>
+                <tr style='border-bottom: 1px solid #e0e0e0;'>
+                    <td style='padding: 12px; font-weight: bold;'>{name}</td>
+                    <td style='padding: 12px; text-align: center; font-weight: bold; color: {bar_color};'>{prob:.1f}%</td>
+                    <td style='padding: 12px; text-align: center;'>
+                        <div style='background: #e0e0e0; border-radius: 10px; height: 20px; width: 100px; margin: 0 auto; position: relative;'>
+                            <div style='background: {bar_color}; height: 100%; width: {bar_width}%; border-radius: 10px; transition: all 0.3s ease;'></div>
+                        </div>
+                    </td>
+                </tr>
             """
+        
         subtype_table += "</table></div>"
-
+        
         # Main diagnostic report
         diagnosis_html = f"""
         <div style="background: linear-gradient(135deg, {diagnosis_color}15, {diagnosis_color}25); border: 3px solid {diagnosis_color}; border-radius: 20px; padding: 30px; margin: 20px 0; font-family: 'Segoe UI', Arial, sans-serif;">
-            
             <div style="text-align: center; margin-bottom: 25px;">
                 <h1 style="color: {diagnosis_color}; margin: 0; font-size: 2.2em;">{diagnosis_emoji} AI DIAGNOSTIC REPORT</h1>
                 <div style="background: {diagnosis_color}; color: white; padding: 8px 20px; border-radius: 25px; display: inline-block; margin: 15px 0; font-size: 1.1em; font-weight: bold;">
                     Primary Diagnosis: {diagnosis}
                 </div>
             </div>
-
+            
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
                 <div style="background: rgba(255,255,255,0.9); padding: 20px; border-radius: 15px; text-align: center;">
                     <h3 style="color: {diagnosis_color}; margin-top: 0;">🎯 Primary Confidence</h3>
@@ -355,32 +378,35 @@ def analyze_image(input_img):
                     </div>
                 </div>
             </div>
-
+            
             {subtype_table}
-
+            
             <div style="background: rgba(255,255,255,0.95); padding: 20px; border-radius: 15px; margin-top: 20px;">
                 <h3 style="color: #2c3e50; margin-top: 0;">📋 Clinical Recommendations</h3>
                 <div style="color: #34495e; line-height: 1.6; font-size: 1.1em;">
                     {recommendations}
                 </div>
             </div>
-
+            
             <div style="background: linear-gradient(45deg, #ff6b6b, #ffa500); color: white; padding: 15px; border-radius: 12px; margin-top: 20px; text-align: center;">
-                <strong>⚠️ Medical Disclaimer:</strong> This AI analysis is for professional assistance only. 
-                Always consult qualified healthcare professionals for definitive diagnosis and treatment decisions.
+                <strong>⚠️ Medical Disclaimer:</strong> This AI analysis is for professional assistance only. Always consult qualified healthcare professionals for definitive diagnosis and treatment decisions.
             </div>
         </div>
         """
-
+        
         # Status message
         status_msg = f"{diagnosis_emoji} **Status**: Analysis Complete - {diagnosis} detected with {binary_conf:.1f}% confidence"
-
+        
         # Create visualization
         fig = create_visualization(img, pred_idx, binary_conf, label, subtype_conf)
-
+        
         return diagnosis_html, fig, status_msg
-
+        
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error during analysis: {error_details}")
+        
         error_html = f"""
         <div style="background: linear-gradient(45deg, #e74c3c, #c0392b); color: white; padding: 25px; border-radius: 15px; margin: 20px 0;">
             <h2 style="color: white; margin: 0; text-align: center;">❌ ANALYSIS ERROR</h2>
