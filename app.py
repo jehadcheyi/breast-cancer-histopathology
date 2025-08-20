@@ -102,15 +102,7 @@ except Exception as e:
 print("\n🚀 All AI systems loaded successfully!")
 
 def prep_img(img):
-    # Ensure the numpy array is always RGB
-    if img.ndim == 2:  # grayscale
-        img = np.stack([img]*3, axis=-1)
-    elif img.shape[-1] == 4:  # RGBA
-        img = img[..., :3]
-    # Now convert to PIL and force RGB
-    img = Image.fromarray(img.astype('uint8'))
-    if img.mode != "RGB":
-        img = img.convert("RGB")
+    img = Image.fromarray(img)
     img = img.resize(img_size)
     arr = img_to_array(img) / 255.0
     return np.expand_dims(arr, axis=0)
@@ -555,7 +547,7 @@ custom_css = """
 """
 
 # Create the modern interface
-title = "🏥 Advanced Histopathology Analysis System"
+title = "🏥 BREAST AI PRO - Advanced Histopathology Analysis System"
 
 description = """
 <div style="text-align: center; padding: 25px;">
@@ -587,25 +579,21 @@ description = """
 instructions = """
 <div style="background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin: 25px 0; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
     <h2 style="color: #2980b9; text-align: center; margin-bottom: 25px;">📋 How to Use the AI Diagnostic System</h2>
-    <h2 style="color: #2980b9; text-align: center; margin-bottom: 25px;">چەوانیا بکارئینانا پروگرامی📋 </h2>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px;">
         <div style="text-align: center; padding: 20px; background: linear-gradient(45deg, #e3f2fd, #bbdefb); border-radius: 15px;">
             <div style="font-size: 40px; margin-bottom: 15px;">📤</div>
             <h3 style="color: #1976d2; margin-bottom: 10px;">Step 1: Upload Image</h3>
             <p style="color: #424242;">Upload a high-quality histopathology image or select from our curated example gallery</p>
-            <p style="color: #424242;">وێنەکی دابگرە </p>
         </div>
         <div style="text-align: center; padding: 20px; background: linear-gradient(45deg, #f3e5f5, #ce93d8); border-radius: 15px;">
             <div style="font-size: 40px; margin-bottom: 15px;">🧠</div>
             <h3 style="color: #7b1fa2; margin-bottom: 10px;">Step 2: AI Processing</h3>
             <p style="color: #424242;">Our advanced neural networks analyze tissue patterns and cellular structures</p>
-            <p style="color: #424242;">مودلێ مە دێ وێنەی ب زیرەکیا دەستکرد شلوڤەکەت</p>
         </div>
         <div style="text-align: center; padding: 20px; background: linear-gradient(45deg, #e8f5e8, #a5d6a7); border-radius: 15px;">
             <div style="font-size: 40px; margin-bottom: 15px;">📊</div>
             <h3 style="color: #388e3c; margin-bottom: 10px;">Step 3: Review Results</h3>
             <p style="color: #424242;">Examine detailed diagnostic reports, confidence scores, and visual attention maps</p>
-            <p style="color: #424242;">راپورتا شلوڤەکرنا وێنەی</p>
         </div>
     </div>
     <div style="background: linear-gradient(45deg, #fff3e0, #ffcc02); padding: 20px; border-radius: 12px; margin-top: 20px; text-align: center;">
@@ -613,8 +601,24 @@ instructions = """
     </div>
 </div>
 """
+
 disclaimer = """
+<div style="background: linear-gradient(45deg, #ffebee, #ffcdd2); border: 2px solid #f44336; color: #c62828; padding: 25px; border-radius: 15px; margin: 25px 0;">
+    <div style="text-align: center; margin-bottom: 15px;">
+        <h2 style="margin: 0; font-size: 1.8em;">⚠️ IMPORTANT MEDICAL DISCLAIMER</h2>
+    </div>
+    <div style="background: rgba(255,255,255,0.8); padding: 20px; border-radius: 10px;">
+        <p style="font-size: 1.1em; line-height: 1.6; margin: 0; text-align: center;">
+            <strong>This AI system is designed exclusively for professional medical assistance and research purposes.</strong><br><br>
+            🏥 Results must be interpreted by qualified healthcare professionals<br>
+            🔬 Does not replace clinical judgment or physical examination<br>
+            📋 Additional diagnostic procedures may be required<br>
+            👨‍⚕️ Always consult with oncologists and pathologists for definitive diagnosis
+        </p>
+    </div>
+</div>
 """
+
 # Create the enhanced interface
 with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="BREAST AI PRO - Advanced Cancer Detection") as demo:
     
@@ -643,7 +647,7 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="BREAST AI PRO - Ad
                 gr.Markdown("*Upload your histopathology image for comprehensive AI analysis*")
                 
                 image_input = gr.Image(
-                    label="🔬 Upload Histopathology Image | حمّل صورة | داگرتن  ",
+                    label="🔬 Upload Histopathology Image | حمّل صورة الأنسجة | وێنەی شیکردنەوەی نەخۆشی",
                     type="numpy",
                     height=400,
                     elem_classes=["image-container"]
@@ -659,14 +663,14 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="BREAST AI PRO - Ad
                 
                 with gr.Row():
                     submit_btn = gr.Button(
-                        "🔍 Analyze with AI | حلل |  شلوڤەکرن ",
+                        "🔍 Analyze with AI | حلل بالذكاء الاصطناعي | شیکردنەوە بە AI",
                         variant="primary",
                         size="lg",
                         scale=2,
                         elem_classes=["analyze-button"]
                     )
                     clear_btn = gr.Button(
-                        "🧹 Clear ",
+                        "🧹 Clear | مسح | پاککردنەوە",
                         variant="secondary",
                         size="lg",
                         scale=1,
@@ -903,6 +907,8 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="BREAST AI PRO - Ad
 if __name__ == "__main__":
     demo.launch(
         share=True,
+        server_name="0.0.0.0",
+        server_port=7860,
         show_error=True,
         favicon_path=None,
         ssl_verify=False
