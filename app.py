@@ -1409,13 +1409,5 @@ if __name__ == "__main__":
         favicon_path=None,
         ssl_verify=False,
         quiet=False,
-        show_api=True,
-        file_directories=["example"] if os.path.exists("example") else None,
-        allowed_paths=["example"] if os.path.exists("example") else None,
-        blocked_paths=None,
-        root_path=None,
-        app_kwargs={
-            "docs_url": "/docs",
-            "redoc_url": "/redoc",
-        }
+        show_api=True
     )
