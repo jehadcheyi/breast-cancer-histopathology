@@ -6,3 +6,4 @@ matplotlib
 numpy
 huggingface_hub
 seaborn
+scikit-learn
