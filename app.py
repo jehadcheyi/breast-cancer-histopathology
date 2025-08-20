@@ -565,7 +565,7 @@ class BreastAIApp:
             </tr>
             """
         
-        return f"""
+        return """
         <div style="border: 3px solid {color}; border-radius: 20px; padding: 25px; 
                     background: linear-gradient(135deg, {color}08, {color}15); margin: 15px 0;">
             
