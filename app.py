@@ -1,399 +1,1021 @@
-#!/usr/bin/env python3
-"""
-app.py — Rewritten application based on the working 'app short.py'.
-- Robust image preprocessing (handles grayscale/RGBA)
-- Quiet TensorFlow logging and CPU-forced model loading
-- Stable Grad-CAM generation with safe normalization
-- Clear error handling and fallbacks
-- Gradio UI for upload / analyze / clear
-"""
-
 import os
-import warnings
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from PIL import Image
 import tensorflow as tf
 from tensorflow.keras.models import load_model, Model
-from tensorflow.keras.preprocessing.image import img_to_array
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import gradio as gr
+import warnings
+
 from huggingface_hub import hf_hub_download
+from tensorflow.keras.models import load_model as keras_load_model
 
-# Suppress non-critical warnings and TF logs for clean output
+# Suppress noisy warnings (keeps output cleaner)
 warnings.filterwarnings("ignore")
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-tf.get_logger().setLevel("ERROR")
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+tf.get_logger().setLevel('ERROR')
 
-# Configuration
+# Debug flag (set to True to print helpful debug info)
+DEBUG = False
+
+# Hugging Face Hub configuration
 REPO_ID = "jehadcheyi/bc_models"
-HF_TOKEN = os.getenv("jehad")  # ensure this env var is set
-IMG_SIZE = (128, 128)
-TARGET_SIZE = (400, 400)
+HF_TOKEN = os.getenv("jehad")  # Ensure this env var is set
 
-CLASSES = {
-    "binary": ["benign", "malignant"],
-    "benign": ["A", "F", "PT", "TA"],
-    "malignant": ["DC", "LC", "MC", "PC"],
-    "benign_names": {
-        "A": "Adenosis",
-        "F": "Fibroadenoma",
-        "PT": "Phyllodes Tumor",
-        "TA": "Tubular Adenoma",
-    },
-    "malignant_names": {
-        "DC": "Ductal Carcinoma",
-        "LC": "Lobular Carcinoma",
-        "MC": "Mucinous Carcinoma",
-        "PC": "Papillary Carcinoma",
-    },
+# Model paths
+model_paths = {
+    'binary': 'binary.h5',
+    'benign': 'benign.h5',
+    'malignant': 'malignant.h5'
 }
 
-MODEL_PATHS = {"binary": "binary.h5", "benign": "benign.h5", "malignant": "malignant.h5"}
+# Image and class definitions
+img_size = (128, 128)
+target_size = (500, 500)
 
-# ------------------------------------------------------------------------------
-# Model loading
-# ------------------------------------------------------------------------------
-def load_models():
-    """Download models from HF and load them (CPU to avoid GPU-specific logs)."""
-    if HF_TOKEN is None:
-        raise EnvironmentError("Hugging Face token not found. Set environment variable 'jehad'.")
+classes = {
+    'binary': ['benign', 'malignant'],
+    'benign': ['A', 'F', 'PT', 'TA'],
+    'malignant': ['DC', 'LC', 'MC', 'PC'],
+    'benign_names': {'A': 'Adenosis', 'F': 'Fibroadenoma', 'PT': 'Phyllodes Tumor', 'TA': 'Tubular Adenoma'},
+    'malignant_names': {'DC': 'Ductal Carcinoma', 'LC': 'Lobular Carcinoma', 'MC': 'Mucinous Carcinoma', 'PC': 'Papillary Carcinoma'}
+}
 
-    models = {}
-    print("🚀 Initializing AI Models...")
+# Initialize models dictionary
+models = {}
 
-    for key, fname in MODEL_PATHS.items():
-        try:
-            print(f"📥 Downloading {key} model...")
-            local_path = hf_hub_download(repo_id=REPO_ID, filename=fname, token=HF_TOKEN, cache_dir="model_cache")
-            print(f"✅ Found {key} at {local_path}. Loading...")
-            # Force CPU device while loading to reduce GPU-related warnings in many environments
-            with tf.device("/CPU:0"):
-                models[key] = load_model(local_path, compile=False)
-            print(f"🎯 {key} model loaded")
-        except Exception as e:
-            print(f"❌ Error loading {key} model: {e}")
-            raise
+# Model Loading
+print("🔄 Initializing AI Models...")
 
-    return models
+# 1. First verify files exist on HF hub (download to cache)
+print("📋 Verifying model files...")
+for name, filename in model_paths.items():
+    try:
+        local_path = hf_hub_download(
+            repo_id=REPO_ID,
+            filename=filename,
+            token=HF_TOKEN,
+            cache_dir="model_cache"
+        )
+        print(f"✅ Found {name} model at: {local_path}")
+    except Exception as e:
+        print(f"❌ Error verifying {name} model: {str(e)}")
+        raise
 
+# 2. Load all models
+print("\n🧠 Loading AI models into memory...")
+try:
+    for name, filename in model_paths.items():
+        local_path = hf_hub_download(
+            repo_id=REPO_ID,
+            filename=filename,
+            token=HF_TOKEN,
+            cache_dir="model_cache"
+        )
+        # Use CPU device to avoid environment GPU-related issues during load
+        with tf.device('/CPU:0'):
+            models[name] = keras_load_model(local_path, compile=False)
+        print(f"🎯 Successfully loaded {name} model")
+except Exception as e:
+    print(f"❌ Model loading failed: {str(e)}")
+    raise
 
-models = load_models()
+# 3. Grad-CAM Setup
+print("\n🔬 Setting up Grad-CAM visualization...")
+try:
+    binary_model = models['binary']
+    last_conv = None
 
-# ------------------------------------------------------------------------------
-# Grad-CAM setup
-# ------------------------------------------------------------------------------
-def setup_gradcam(binary_model):
-    """Return a model that outputs last conv layer and predictions (for Grad-CAM)."""
-    last_conv_name = None
+    # Find last conv layer (most reliable approach)
     for layer in reversed(binary_model.layers):
         if isinstance(layer, tf.keras.layers.Conv2D):
-            last_conv_name = layer.name
+            last_conv = layer.name
             break
-    if last_conv_name is None:
-        raise ValueError("No Conv2D layer found in binary model for Grad-CAM.")
-    grad_model = Model(inputs=binary_model.inputs, outputs=[binary_model.get_layer(last_conv_name).output, binary_model.output])
-    return grad_model
 
+    if last_conv is None:
+        raise ValueError("No convolutional layer found in binary model")
 
-grad_model = setup_gradcam(models["binary"])
-print("🎯 Grad-CAM ready — All systems operational")
+    grad_model = Model(
+        inputs=binary_model.inputs,
+        outputs=[binary_model.get_layer(last_conv).output, binary_model.output]
+    )
 
-# ------------------------------------------------------------------------------
-# Image preprocessing and prediction
-# ------------------------------------------------------------------------------
-def preprocess_image(img):
+    print("✅ Grad-CAM setup complete")
+except Exception as e:
+    print(f"❌ Grad-CAM setup failed: {str(e)}")
+    raise
+
+print("\n🚀 All AI systems loaded successfully!")
+
+# ---------- Robust preprocessing (preserves original function names) ----------
+def prep_img(img):
     """
-    Convert input numpy image to an RGB, resized, normalized array suitable for model.predict.
-    Handles grayscale and RGBA images.
+    Robust preprocessing: handle grayscale, single-channel, RGBA, different dtypes.
+    Returns batch array shape (1, H, W, 3) float32 in [0,1].
     """
     if img is None:
-        raise ValueError("No image provided to preprocess_image()")
+        raise ValueError("No image input provided to prep_img()")
 
     arr = img.copy()
 
-    # If grayscale, stack channels
+    # Convert possible float images to uint8 range if necessary (common in Gradio)
+    if arr.dtype != np.uint8:
+        # If in [0,1] floats, scale
+        if arr.dtype == np.float32 or arr.dtype == np.float64:
+            if arr.max() <= 1.0:
+                arr = (arr * 255).astype('uint8')
+            else:
+                arr = arr.astype('uint8')
+        else:
+            arr = arr.astype('uint8')
+
+    # Normalize channel shapes:
     if arr.ndim == 2:
+        # grayscale HxW -> HxWx3
         arr = np.stack([arr] * 3, axis=-1)
-    # If single-channel shaped (H, W, 1)
-    if arr.ndim == 3 and arr.shape[2] == 1:
+    elif arr.ndim == 3 and arr.shape[2] == 1:
         arr = np.concatenate([arr] * 3, axis=2)
-    # If RGBA, drop alpha
-    if arr.ndim == 3 and arr.shape[2] == 4:
+    elif arr.ndim == 3 and arr.shape[2] == 4:
+        # RGBA -> RGB (drop alpha)
         arr = arr[..., :3]
 
-    # Convert to PIL to safely ensure RGB and resize with good interpolation
-    pil = Image.fromarray(arr.astype("uint8"))
+    # Convert to PIL to force RGB mode and resize with high-quality filter
+    pil = Image.fromarray(arr)
     if pil.mode != "RGB":
         pil = pil.convert("RGB")
-    pil = pil.resize(IMG_SIZE, Image.LANCZOS)
-    arr = img_to_array(pil).astype("float32") / 255.0
+    pil = pil.resize(img_size, Image.LANCZOS)
+    arr = img_to_array(pil).astype(np.float32) / 255.0
     arr = np.expand_dims(arr, axis=0)
+
+    if DEBUG:
+        print("prep_img -> shape:", arr.shape, "dtype:", arr.dtype, "min/max:", arr.min(), arr.max())
+
     return arr
 
-
-def predict_image(img):
-    """Run binary + subtype prediction; returns index, confidences and subtype probabilities."""
-    arr = preprocess_image(img)
-
-    # Binary prediction
-    with tf.device("/CPU:0"):
-        binary_pred = models["binary"].predict(arr, verbose=0)
-
-    pred_idx = int(np.argmax(binary_pred[0]))
-    binary_conf = float(np.max(binary_pred[0]) * 100.0)
-    label = CLASSES["binary"][pred_idx]  # 'benign' or 'malignant'
-
-    # Subtype prediction
-    with tf.device("/CPU:0"):
-        subtype_pred = models[label].predict(arr, verbose=0)
-
-    subtype_idx = int(np.argmax(subtype_pred[0]))
-    subtype_conf = float(np.max(subtype_pred[0]) * 100.0)
-    subtype_code = CLASSES[label][subtype_idx]
-    subtype_name = CLASSES[f"{label}_names"][subtype_code]
-
-    # Build subtype probabilities dict (human names)
-    subtype_probs = {
-        CLASSES[f"{label}_names"][code]: float(prob * 100.0)
-        for code, prob in zip(CLASSES[label], subtype_pred[0])
-    }
-
-    return pred_idx, binary_conf, subtype_name, subtype_conf, subtype_probs
-
-# ------------------------------------------------------------------------------
-# Grad-CAM generation
-# ------------------------------------------------------------------------------
-def generate_gradcam(img, pred_idx):
+# ---------- Prediction ----------
+def predict(img):
     """
-    Generate a colored heatmap (in RGB) for the predicted class index.
-    Returns a uint8 (H,W,3) heatmap in BGR (OpenCV) format.
+    Runs binary model and the relevant subtype model.
+    Returns: pred_idx, binary_conf, subtype_name, subtype_conf, subtype_probs(dict)
     """
     try:
-        arr = preprocess_image(img)  # shape (1, H, W, 3)
+        arr = prep_img(img)
+
+        # Binary Classification
+        with tf.device('/CPU:0'):
+            binary_pred = models['binary'].predict(arr, verbose=0)
+
+        pred_idx = int(np.argmax(binary_pred[0]))
+        binary_conf = float(100.0 * np.max(binary_pred[0]))
+        label = classes['binary'][pred_idx]
+
+        # Subtype Classification
+        subtype_probs = {}
+        with tf.device('/CPU:0'):
+            subtype_pred = models[label].predict(arr, verbose=0)
+
+        subtype_idx = int(np.argmax(subtype_pred[0]))
+        subtype_conf = float(100.0 * np.max(subtype_pred[0]))
+
+        if label == 'benign':
+            subtype_code = classes['benign'][subtype_idx]
+            subtype_name = classes['benign_names'][subtype_code]
+
+            for code, prob in zip(classes['benign'], subtype_pred[0]):
+                subtype_probs[classes['benign_names'][code]] = float(prob * 100.0)
+        else:
+            subtype_code = classes['malignant'][subtype_idx]
+            subtype_name = classes['malignant_names'][subtype_code]
+
+            for code, prob in zip(classes['malignant'], subtype_pred[0]):
+                subtype_probs[classes['malignant_names'][code]] = float(prob * 100.0)
+
+        if DEBUG:
+            print("predict -> pred_idx:", pred_idx, "binary_conf:", binary_conf, "subtype:", subtype_name, "subtype_conf:", subtype_conf)
+            print("subtype_probs:", subtype_probs)
+
+        return pred_idx, binary_conf, subtype_name, subtype_conf, subtype_probs
+    except Exception as e:
+        # Provide context in logs and re-raise for UI to catch
+        print(f"Error during prediction: {e}")
+        raise
+
+# ---------- Grad-CAM heatmap generation ----------
+def make_heatmap(img, pred_idx):
+    """Generate Grad-CAM heatmap. Accepts image in RGB numpy format."""
+    try:
+        # Prepare input for grad_model (use same preprocessing shape as prediction)
+        arr = prep_img(img)  # shape (1, H, W, 3)
 
         with tf.GradientTape() as tape:
-            conv_outputs, predictions = grad_model(arr)
-            loss = predictions[:, pred_idx]
+            conv_out, preds = grad_model(arr)
+            loss = preds[:, pred_idx]
 
-        grads = tape.gradient(loss, conv_outputs)
+        grads = tape.gradient(loss, conv_out)
         if grads is None:
-            # If gradient flow failed, return empty map
-            return np.zeros((*TARGET_SIZE, 3), dtype=np.uint8)
+            # Gradient failed, return zero heatmap
+            if DEBUG:
+                print("make_heatmap -> gradients are None")
+            return np.zeros((*target_size, 3), dtype=np.uint8)
 
         grads = grads[0]  # (h, w, channels)
-        conv_out = conv_outputs[0]  # (h, w, channels)
+        conv_out = conv_out[0]  # (h, w, channels)
 
-        # Global average pooling of gradients
-        pooled_grads = tf.reduce_mean(grads, axis=(0, 1))  # (channels,)
+        pooled = tf.reduce_mean(grads, axis=(0, 1))
+        # Weighted sum of convolution outputs and pooled gradients
+        heatmap = tf.reduce_sum(conv_out * pooled, axis=-1)
 
-        # Weighted sum of conv feature maps
-        heatmap = tf.reduce_sum(conv_out * pooled_grads, axis=-1)
-
-        # ReLU and normalize
+        # ReLU
         heatmap = tf.maximum(heatmap, 0)
-        max_val = tf.reduce_max(heatmap)
-        if max_val.numpy() > 0:
-            heatmap = heatmap / max_val
+        max_val = tf.math.reduce_max(heatmap)
+        if max_val == 0 or tf.math.is_nan(max_val):
+            # Avoid division by zero
+            if DEBUG:
+                print("make_heatmap -> heatmap max is zero or NaN, returning empty heatmap")
+            return np.zeros((*target_size, 3), dtype=np.uint8)
 
+        heatmap = heatmap / max_val
         heatmap = heatmap.numpy()
-        heatmap_resized = cv2.resize(heatmap, TARGET_SIZE, interpolation=cv2.INTER_LINEAR)
+        heatmap_resized = cv2.resize(heatmap, target_size, interpolation=cv2.INTER_LINEAR)
 
+        # Convert to color map (OpenCV expects uint8)
         heatmap_uint8 = np.uint8(255 * heatmap_resized)
         colored = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)  # BGR
         return colored
-
     except Exception as e:
-        print(f"Grad-CAM generation error: {e}")
-        return np.zeros((*TARGET_SIZE, 3), dtype=np.uint8)
+        print(f"Error generating heatmap: {e}")
+        # Return empty heatmap on error to avoid crashing UI
+        return np.zeros((*target_size, 3), dtype=np.uint8)
 
-# ------------------------------------------------------------------------------
-# Visualization
-# ------------------------------------------------------------------------------
-def create_visualization(img, pred_idx):
-    """Return a matplotlib Figure showing original, heatmap and overlay."""
+# ---------- Cropping helper ----------
+def get_crop_box(shape, percent):
+    """Calculate centered crop box coordinates"""
+    h, w = shape[:2]
+    crop_h = int(h * percent / 100)
+    crop_w = int(w * percent / 100)
+    left = (w - crop_w) // 2
+    top = (h - crop_h) // 2
+    return left, top, left + crop_w, top + crop_h
+
+# ---------- Visualization (keep original detailed layout) ----------
+def create_visualization(img, pred_idx, binary_conf, label, subtype_conf, zooms=[75, 50, 25]):
+    """Create visualization with detailed explanations"""
     try:
-        # Ensure image is RGB uint8 and resized for display
-        if img.ndim == 2:
-            img_rgb = np.stack([img] * 3, axis=-1)
-        elif img.shape[2] == 4:
-            img_rgb = img[..., :3]
-        else:
-            img_rgb = img.copy()
+        # Ensure input is uint8 RGB
+        if img.dtype != np.uint8:
+            img = (img * 255).astype(np.uint8) if img.max() <= 1.0 else img.astype(np.uint8)
 
-        # Resize for visualization
-        disp_img = cv2.resize(img_rgb, TARGET_SIZE, interpolation=cv2.INTER_LINEAR)
-        # Gradio images often are RGB; OpenCV uses BGR for blending/colormap
-        disp_bgr = cv2.cvtColor(disp_img.astype("uint8"), cv2.COLOR_RGB2BGR)
+        # Convert to BGR for OpenCV operations as original code expects
+        img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        h, w = img_bgr.shape[:2]
+        levels = 1 + len(zooms)
 
-        heatmap_bgr = generate_gradcam(img, pred_idx)  # BGR uint8
+        fig, axs = plt.subplots(levels, 3, figsize=(18, 6 * levels), dpi=100)
+        if levels == 1:
+            # Ensure axs is 2D-indexable for consistency
+            axs = np.expand_dims(axs, axis=0)
 
-        if heatmap_bgr.sum() > 0:
-            overlay_bgr = cv2.addWeighted(disp_bgr, 0.6, heatmap_bgr, 0.4, 0)
-        else:
-            overlay_bgr = disp_bgr
+        # Full image analysis
+        resized = cv2.resize(img_bgr, target_size)
+        heatmap = make_heatmap(img, pred_idx)
+        overlay = cv2.addWeighted(resized, 0.6, heatmap, 0.4, 0)
 
-        # Convert to RGB for Matplotlib
-        disp_rgb = cv2.cvtColor(disp_bgr, cv2.COLOR_BGR2RGB)
-        heatmap_rgb = cv2.cvtColor(heatmap_bgr, cv2.COLOR_BGR2RGB)
-        overlay_rgb = cv2.cvtColor(overlay_bgr, cv2.COLOR_BGR2RGB)
+        # Convert back to RGB for display in matplotlib
+        resized_rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        heatmap_rgb = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+        overlay_rgb = cv2.cvtColor(overlay, cv2.COLOR_BGR2RGB)
 
-        fig, axes = plt.subplots(1, 3, figsize=(12, 4), dpi=100)
-        fig.patch.set_facecolor("white")
+        axs[0][0].imshow(resized_rgb)
+        axs[0][0].set_title("🔬 Original Tissue Sample\n(Full View)", fontsize=14, pad=15, fontweight='bold')
+        axs[0][0].axis('off')
 
-        axes[0].imshow(disp_rgb)
-        axes[0].set_title("🔬 Original Image", fontsize=12, fontweight="bold")
-        axes[0].axis("off")
+        axs[0][1].imshow(heatmap_rgb)
+        axs[0][1].set_title("🌡️ AI Attention Heatmap\n(Red = High Importance)", fontsize=14, pad=15, fontweight='bold')
+        axs[0][1].axis('off')
 
-        axes[1].imshow(heatmap_rgb)
-        axes[1].set_title("🌡️ Attention Map", fontsize=12, fontweight="bold")
-        axes[1].axis("off")
+        axs[0][2].imshow(overlay_rgb)
+        axs[0][2].set_title("🎯 Combined Analysis\n(AI Focus Areas)", fontsize=14, pad=15, fontweight='bold')
+        axs[0][2].axis('off')
 
-        axes[2].imshow(overlay_rgb)
-        axes[2].set_title("🎯 Overlay", fontsize=12, fontweight="bold")
-        axes[2].axis("off")
+        # Zoomed analysis
+        for i, zoom in enumerate(zooms):
+            x1, y1, x2, y2 = get_crop_box(img_bgr.shape, zoom)
+            # guard against degenerate boxes
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(w, x2), min(h, y2)
+            if x2 <= x1 or y2 <= y1:
+                # fallback to small centered crop
+                x1, y1, x2, y2 = (w//4, h//4, w*3//4, h*3//4)
+
+            crop = img_bgr[y1:y2, x1:x2]
+            if crop.size == 0:
+                crop = img_bgr.copy()
+
+            resized_crop = cv2.resize(crop, target_size)
+            crop_heat = make_heatmap(cv2.cvtColor(resized_crop, cv2.COLOR_BGR2RGB), pred_idx)
+            crop_over = cv2.addWeighted(resized_crop, 0.6, crop_heat, 0.4, 0)
+
+            mask = np.zeros((h, w), dtype=np.uint8)
+            mask[y1:y2, x1:x2] = 1
+            gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+            gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+            highlight = np.where(mask[..., None], img_bgr, gray_rgb)
+            cv2.rectangle(highlight, (x1, y1), (x2, y2), (255, 0, 0), 3)
+
+            # Convert to RGB for matplotlib display
+            highlight_rgb = cv2.cvtColor(highlight, cv2.COLOR_BGR2RGB)
+            resized_crop_rgb = cv2.cvtColor(resized_crop, cv2.COLOR_BGR2RGB)
+            crop_heat_rgb = cv2.cvtColor(crop_heat, cv2.COLOR_BGR2RGB)
+            crop_over_rgb = cv2.cvtColor(crop_over, cv2.COLOR_BGR2RGB)
+
+            axs[i+1][0].imshow(highlight_rgb)
+            axs[i+1][0].set_title(f"🔍 Analysis Region: {zoom}%\n(Blue box shows zoom area)", fontsize=12, pad=10)
+            axs[i+1][0].axis('off')
+
+            axs[i+1][1].imshow(crop_heat_rgb)
+            axs[i+1][1].set_title(f"🌡️ Detailed Heatmap\n({zoom}% scale analysis)", fontsize=12, pad=10)
+            axs[i+1][1].axis('off')
+
+            axs[i+1][2].imshow(crop_over_rgb)
+            axs[i+1][2].set_title(f"🎯 Focused Analysis\n({zoom}% scale overlay)", fontsize=12, pad=10)
+            axs[i+1][2].axis('off')
+
+        # Main title with diagnosis information
+        diagnosis = classes['binary'][pred_idx].upper()
+        color = '#4CAF50' if diagnosis == 'BENIGN' else '#F44336'
+
+        plt.suptitle(
+            f"🏥 ADVANCED HISTOPATHOLOGY AI ANALYSIS\n\n"
+            f"🎯 Primary Diagnosis: {diagnosis} ({binary_conf:.1f}% confidence)\n"
+            f"🔬 Multi-Scale Attention Visualization System",
+            fontsize=18,
+            y=0.98,
+            color=color,
+            fontweight='bold'
+        )
 
         plt.tight_layout()
+        plt.subplots_adjust(top=0.90)
         return fig
-
     except Exception as e:
-        print(f"Visualization creation error: {e}")
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.text(0.5, 0.5, f"Visualization Error\n{str(e)}", ha="center", va="center", transform=ax.transAxes)
-        ax.axis("off")
+        # Keep UI stable: return fallback figure explaining the error
+        print(f"create_visualization error: {e}")
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+        ax.text(0.5, 0.5, f"Visualization Error\n{str(e)}", ha='center', va='center', transform=ax.transAxes)
+        ax.axis('off')
         return fig
 
-# ------------------------------------------------------------------------------
-# Main analysis function (used by Gradio)
-# ------------------------------------------------------------------------------
-def create_waiting_message():
-    return """
-    <div style='background: linear-gradient(135deg, #e3f2fd, #bbdefb); padding: 20px; border-radius: 12px;'>
-        <h3 style='color:#1976d2;'>AI Diagnostic System Ready</h3>
-        <p>Upload a histopathology image to receive analysis (binary + subtype + attention map).</p>
-    </div>
-    """
-
-
+# ---------- Main analyze function ----------
 def analyze_image(input_img):
-    """Primary function called from front-end."""
     if input_img is None:
-        return create_waiting_message(), None, "🟡 Status: Waiting for image"
+        return """
+        <div style="background: linear-gradient(45deg, #FFA726, #FF7043); color: white; padding: 25px; border-radius: 15px; text-align: center; margin: 20px 0;">
+            <h2 style="margin: 0; font-size: 1.5em;">⚠️ No Image Provided</h2>
+            <p style="margin: 10px 0; font-size: 1.1em;">Please upload a histopathology image to begin AI analysis</p>
+            <div style="background: rgba(255,255,255,0.2); padding: 10px; border-radius: 8px; margin-top: 15px;">
+                <strong>Supported formats:</strong> JPG, PNG, JPEG, TIF
+            </div>
+        </div>
+        """, None, "🟡 **Status**: Waiting for Image Upload"
 
     try:
-        # Gradio provides numpy arrays in RGB order, keep that consistent
-        img = input_img.astype("uint8")
+        # Ensure proper dtype for subsequent functions
+        img = input_img.astype('uint8')
 
-        pred_idx, binary_conf, subtype, subtype_conf, subtype_probs = predict_image(img)
+        pred_idx, binary_conf, subtype, subtype_conf, subtype_probs = predict(img)
 
-        diagnosis_label = CLASSES["binary"][pred_idx].upper()
-        color = "#4CAF50" if diagnosis_label == "BENIGN" else "#F44336"
-        emoji = "🟢" if diagnosis_label == "BENIGN" else "🔴"
-        risk_level = "LOW RISK" if diagnosis_label == "BENIGN" else "HIGH RISK"
+        label = classes['binary'][pred_idx]
+        diagnosis = label.upper()
+        diagnosis_color = "#4CAF50" if diagnosis == "BENIGN" else "#F44336"
+        diagnosis_emoji = "🟢" if diagnosis == "BENIGN" else "🔴"
 
-        # Build subtype rows HTML
-        subtype_rows = ""
+        # Risk assessment
+        if diagnosis == "BENIGN":
+            risk_level = "LOW RISK"
+            risk_color = "#4CAF50"
+            recommendations = """
+            • Continue routine screening schedule
+            • Monitor for any changes in symptoms
+            • Maintain healthy lifestyle practices
+            • Follow-up as recommended by physician
+            """
+        else:
+            risk_level = "HIGH RISK - REQUIRES ATTENTION"
+            risk_color = "#F44336"
+            recommendations = """
+            • IMMEDIATE consultation with oncologist required
+            • Consider additional diagnostic procedures
+            • Discuss treatment options with medical team
+            • Seek second opinion if needed
+            """
+
+        # Enhanced subtype table with progress bars
+        subtype_table = """
+        <div style='background: #f8f9fa; padding: 20px; border-radius: 12px; margin: 15px 0;'>
+            <h4 style='color: #2c3e50; margin-bottom: 15px; text-align: center;'>🔬 Detailed Subtype Analysis</h4>
+            <table style='width:100%; border-collapse: collapse; font-family: Arial, sans-serif;'>
+                <tr style='background: linear-gradient(45deg, #667eea, #764ba2); color: white;'>
+                    <th style='padding: 12px; text-align: left; border-radius: 8px 0 0 0;'>Cancer Subtype</th>
+                    <th style='padding: 12px; text-align: center;'>Confidence Level</th>
+                    <th style='padding: 12px; text-align: center; border-radius: 0 8px 0 0;'>Visual Indicator</th>
+                </tr>
+        """
+
         for name, prob in sorted(subtype_probs.items(), key=lambda x: x[1], reverse=True):
-            pc = min(100, float(prob))
-            bar_color = "#4CAF50" if pc < 40 else "#FF9800" if pc < 70 else "#F44336"
-            subtype_rows += f"""
-            <tr style="border-bottom:1px solid #eee;">
-                <td style="padding:8px;">{name}</td>
-                <td style="padding:8px; text-align:center; color:{bar_color}; font-weight:bold;">{pc:.1f}%</td>
-                <td style="padding:8px; width:120px;">
-                    <div style="background:#f0f0f0; border-radius:8px; height:10px;">
-                        <div style="width:{pc}%; background:{bar_color}; height:100%; border-radius:8px;"></div>
+            # clamp probability for display
+            prob_clamped = max(0.0, min(100.0, float(prob)))
+            bar_width = int(prob_clamped)
+            bar_color = "#4CAF50" if prob_clamped < 30 else "#FF9800" if prob_clamped < 70 else "#F44336"
+
+            subtype_table += f"""
+            <tr style='border-bottom: 1px solid #e0e0e0;'>
+                <td style='padding: 12px; font-weight: bold;'>{name}</td>
+                <td style='padding: 12px; text-align: center; font-weight: bold; color: {bar_color};'>{prob_clamped:.1f}%</td>
+                <td style='padding: 12px; text-align: center;'>
+                    <div style='background: #e0e0e0; border-radius: 10px; height: 20px; width: 100px; margin: 0 auto; position: relative;'>
+                        <div style='background: {bar_color}; height: 100%; width: {bar_width}%; border-radius: 10px; transition: all 0.3s ease;'></div>
                     </div>
                 </td>
             </tr>
             """
 
-        results_html = f"""
-        <div style="border:3px solid {color}; border-radius:12px; padding:18px; background:linear-gradient(135deg, {color}10, {color}05);">
-            <div style="text-align:center;">
-                <h2 style="color:{color}; margin:0;">{emoji} {diagnosis_label}</h2>
-                <p style="margin:6px 0; font-weight:bold;">{binary_conf:.1f}% • {risk_level}</p>
-            </div>
-            <div style="display:flex; gap:12px; margin-top:12px;">
-                <div style="flex:1; background:white; border-radius:8px; padding:10px;">
-                    <h4 style="margin-top:0;">Primary subtype</h4>
-                    <div style="font-weight:bold;">{subtype}</div>
-                    <div style="margin-top:6px; background:#3498db; color:white; display:inline-block; padding:4px 10px; border-radius:12px;">{subtype_conf:.1f}%</div>
-                </div>
-                <div style="flex:2; background:white; border-radius:8px; padding:10px;">
-                    <h4 style="margin-top:0;">All subtypes</h4>
-                    <table style="width:100%; border-collapse:collapse; font-size:0.9em;">{subtype_rows}</table>
+        subtype_table += "</table></div>"
+
+        # Main diagnostic report
+        diagnosis_html = f"""
+        <div style="background: linear-gradient(135deg, {diagnosis_color}15, {diagnosis_color}25); border: 3px solid {diagnosis_color}; border-radius: 20px; padding: 30px; margin: 20px 0; font-family: 'Segoe UI', Arial, sans-serif;">
+            
+            <div style="text-align: center; margin-bottom: 25px;">
+                <h1 style="color: {diagnosis_color}; margin: 0; font-size: 2.2em;">{diagnosis_emoji} AI DIAGNOSTIC REPORT</h1>
+                <div style="background: {diagnosis_color}; color: white; padding: 8px 20px; border-radius: 25px; display: inline-block; margin: 15px 0; font-size: 1.1em; font-weight: bold;">
+                    Primary Diagnosis: {diagnosis}
                 </div>
             </div>
-            <div style="margin-top:12px; background:#fff3cd; padding:8px; border-radius:6px;">
-                <strong>Disclaimer:</strong> AI output for research/educational purposes. Consult clinicians for decisions.
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px;">
+                <div style="background: rgba(255,255,255,0.9); padding: 20px; border-radius: 15px; text-align: center;">
+                    <h3 style="color: {diagnosis_color}; margin-top: 0;">🎯 Primary Confidence</h3>
+                    <div style="font-size: 2.5em; font-weight: bold; color: {diagnosis_color};">{binary_conf:.1f}%</div>
+                    <div style="background: {risk_color}; color: white; padding: 5px 15px; border-radius: 20px; margin-top: 10px; font-weight: bold;">
+                        {risk_level}
+                    </div>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.9); padding: 20px; border-radius: 15px; text-align: center;">
+                    <h3 style="color: #2980b9; margin-top: 0;">🔬 Most Likely Subtype</h3>
+                    <div style="font-size: 1.3em; font-weight: bold; color: #2c3e50; margin: 10px 0;">{subtype}</div>
+                    <div style="background: #3498db; color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold;">
+                        {subtype_conf:.1f}% Confidence
+                    </div>
+                </div>
+            </div>
+
+            {subtype_table}
+
+            <div style="background: rgba(255,255,255,0.95); padding: 20px; border-radius: 15px; margin-top: 20px;">
+                <h3 style="color: #2c3e50; margin-top: 0;">📋 Clinical Recommendations</h3>
+                <div style="color: #34495e; line-height: 1.6; font-size: 1.1em;">
+                    {recommendations}
+                </div>
+            </div>
+
+            <div style="background: linear-gradient(45deg, #ff6b6b, #ffa500); color: white; padding: 15px; border-radius: 12px; margin-top: 20px; text-align: center;">
+                <strong>⚠️ Medical Disclaimer:</strong> This AI analysis is for professional assistance only. 
+                Always consult qualified healthcare professionals for definitive diagnosis and treatment decisions.
             </div>
         </div>
         """
 
-        fig = create_visualization(img, pred_idx)
-        status = f"{emoji} Analysis complete — {diagnosis_label} ({binary_conf:.1f}%)"
-        return results_html, fig, status
+        # Status message
+        status_msg = f"{diagnosis_emoji} **Status**: Analysis Complete - {diagnosis} detected with {binary_conf:.1f}% confidence"
+
+        # Create visualization (use the original signature - the function internally only needs img and pred_idx)
+        fig = create_visualization(img, pred_idx, binary_conf, label, subtype_conf)
+
+        return diagnosis_html, fig, status_msg
 
     except Exception as e:
+        # Provide informative error HTML to user and log full error server-side
         print(f"Analyze error: {e}")
-        err_html = f"""
-        <div style='background:linear-gradient(45deg,#e74c3c,#c0392b); color:white; padding:12px; border-radius:8px;'>
-            <h3 style="margin:0;">❌ Analysis Error</h3>
-            <p style="margin-top:8px;">{str(e)}</p>
+        error_html = f"""
+        <div style="background: linear-gradient(45deg, #e74c3c, #c0392b); color: white; padding: 25px; border-radius: 15px; margin: 20px 0;">
+            <h2 style="color: white; margin: 0; text-align: center;">❌ ANALYSIS ERROR</h2>
+            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px; margin: 15px 0;">
+                <strong>Error Details:</strong> {str(e)}
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
+                <h4>🔧 Troubleshooting Steps:</h4>
+                <ul style="text-align: left; max-width: 400px; margin: 0 auto;">
+                    <li>Ensure image is a valid histopathology scan</li>
+                    <li>Check file format (PNG, JPG, JPEG, TIF supported)</li>
+                    <li>Try uploading a different image</li>
+                    <li>Contact technical support if issue persists</li>
+                </ul>
+            </div>
         </div>
         """
-        return err_html, None, "🔴 Analysis failed"
+        return error_html, None, "🔴 **Status**: Analysis Failed - System Error"
 
-# ------------------------------------------------------------------------------
-# Gradio UI
-# ------------------------------------------------------------------------------
+# ---------- Sample images loader (unchanged) ----------
+def get_sample_images():
+    sample_images = []
+    sample_folder = "example"
+    if os.path.exists(sample_folder):
+        for file in os.listdir(sample_folder):
+            if file.lower().endswith(('.png', '.jpg', '.jpeg', '.tif')):
+                try:
+                    img_path = os.path.join(sample_folder, file)
+                    img = cv2.imread(img_path)
+                    if img is not None:
+                        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                        sample_images.append((img, file))
+                except Exception as e:
+                    print(f"Error loading sample image {file}: {e}")
+    return sample_images
+
+sample_images = get_sample_images()
+
+# ---------- The original CSS, UI and Gradio Blocks (kept intact) ----------
 custom_css = """
-.gradio-container { background: linear-gradient(135deg,#667eea,#764ba2); font-family:Segoe UI, Arial; }
-.main-header { background: rgba(255,255,255,0.95); border-radius:12px; padding:16px; margin-bottom:12px; text-align:center; }
-.analysis-section { background: rgba(255,255,255,0.95); padding:12px; border-radius:10px; }
-.btn-primary { background: linear-gradient(45deg,#4CAF50,#45a049) !important; }
+/* Global Styles */
+.gradio-container {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+    min-height: 100vh;
+}
+
+/* Header Styling */
+.main-header {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(15px);
+    border-radius: 25px;
+    padding: 40px;
+    margin-bottom: 30px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    text-align: center;
+}
+
+/* Card Styling */
+.analysis-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(15px);
+    border-radius: 20px;
+    padding: 25px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    margin: 15px 0;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.analysis-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* Button Styling */
+.analyze-button {
+    background: linear-gradient(45deg, #4CAF50, #45a049) !important;
+    border: none !important;
+    border-radius: 25px !important;
+    padding: 15px 30px !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
+    color: white !important;
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.3) !important;
+    transition: all 0.3s ease !important;
+}
+
+.analyze-button:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 8px 25px rgba(76, 175, 80, 0.4) !important;
+}
+
+.clear-button {
+    background: linear-gradient(45deg, #FF7043, #FF5722) !important;
+    border: none !important;
+    border-radius: 25px !important;
+    padding: 15px 30px !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
+    color: white !important;
+    box-shadow: 0 6px 20px rgba(255, 87, 34, 0.3) !important;
+    transition: all 0.3s ease !important;
+}
+
+.clear-button:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 8px 25px rgba(255, 87, 34, 0.4) !important;
+}
+
+/* Image Containers */
+.image-container {
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.image-container:hover {
+    transform: scale(1.02);
+}
+
+/* Gallery Styling */
+.example-gallery {
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Status Indicators */
+.status-display {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 15px;
+    border-radius: 12px;
+    margin: 10px 0;
+    text-align: center;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Animation */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.pulse-animation {
+    animation: pulse 2s infinite;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .analysis-card {
+        margin: 10px 5px;
+        padding: 20px;
+    }
+    
+    .main-header {
+        padding: 25px;
+        margin-bottom: 20px;
+    }
+}
 """
 
-with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="Breast Cancer AI Analyzer") as demo:
-    gr.HTML("""
-    <div class="main-header">
-        <h1>🏥 Breast Cancer AI Analyzer</h1>
-        <p>Binary + subtype detection with Grad-CAM attention visualization</p>
-    </div>
-    """)
+# Create the modern interface (keeps your original layout)
+title = "🏥 Advanced Histopathology Analysis System"
 
+description = """
+<div style="text-align: center; padding: 25px;">
+    <h1 style="color: #2c3e50; margin-bottom: 20px; font-size: 2.8em; text-shadow: 2px 2px 4px rgba(0,0,0,0.1);">
+        🔬 Revolutionary AI-Powered Cancer Detection Platform
+    </h1>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 30px 0;">
+        <div style="background: linear-gradient(45deg, #4CAF50, #45a049); color: white; padding: 20px; border-radius: 15px;">
+            <h3 style="margin: 0; font-size: 1.2em;">🎯 98% Accuracy</h3>
+            <p style="margin: 5px 0;">Clinical-grade precision</p>
+        </div>
+        <div style="background: linear-gradient(45deg, #2196F3, #1976D2); color: white; padding: 20px; border-radius: 15px;">
+            <h3 style="margin: 0; font-size: 1.2em;">⚡ Real-time Analysis</h3>
+            <p style="margin: 5px 0;">Results in seconds</p>
+        </div>
+        <div style="background: linear-gradient(45deg, #FF9800, #F57C00); color: white; padding: 20px; border-radius: 15px;">
+            <h3 style="margin: 0; font-size: 1.2em;">🔬 Multi-scale Detection</h3>
+            <p style="margin: 5px 0;">Comprehensive analysis</p>
+        </div>
+    </div>
+    <p style="font-size: 1.3em; color: #34495e; line-height: 1.6; max-width: 900px; margin: 20px auto;">
+        Our cutting-edge deep learning system provides comprehensive histopathological analysis, 
+        combining <strong>binary classification</strong>, <strong>subtype identification</strong>, 
+        and <strong>visual attention mapping</strong> for unprecedented diagnostic accuracy.
+    </p>
+</div>
+"""
+
+instructions = """
+<div style="background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin: 25px 0; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+    <h2 style="color: #2980b9; text-align: center; margin-bottom: 25px;">📋 How to Use the AI Diagnostic System</h2>
+    <h2 style="color: #2980b9; text-align: center; margin-bottom: 25px;">چەوانیا بکارئینانا پروگرامی📋 </h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px;">
+        <div style="text-align: center; padding: 20px; background: linear-gradient(45deg, #e3f2fd, #bbdefb); border-radius: 15px;">
+            <div style="font-size: 40px; margin-bottom: 15px;">📤</div>
+            <h3 style="color: #1976d2; margin-bottom: 10px;">Step 1: Upload Image</h3>
+            <p style="color: #424242;">Upload a high-quality histopathology image or select from our curated example gallery</p>
+            <p style="color: #424242;">وێنەکی دابگرە </p>
+        </div>
+        <div style="text-align: center; padding: 20px; background: linear-gradient(45deg, #f3e5f5, #ce93d8); border-radius: 15px;">
+            <div style="font-size: 40px; margin-bottom: 15px;">🧠</div>
+            <h3 style="color: #7b1fa2; margin-bottom: 10px;">Step 2: AI Processing</h3>
+            <p style="color: #424242;">Our advanced neural networks analyze tissue patterns and cellular structures</p>
+            <p style="color: #424242;">مودلێ مە دێ وێنەی ب زیرەکیا دەستکرد شلوڤەکەت</p>
+        </div>
+        <div style="text-align: center; padding: 20px; background: linear-gradient(45deg, #e8f5e8, #a5d6a7); border-radius: 15px;">
+            <div style="font-size: 40px; margin-bottom: 15px;">📊</div>
+            <h3 style="color: #388e3c; margin-bottom: 10px;">Step 3: Review Results</h3>
+            <p style="color: #424242;">Examine detailed diagnostic reports, confidence scores, and visual attention maps</p>
+            <p style="color: #424242;">راپورتا شلوڤەکرنا وێنەی</p>
+        </div>
+    </div>
+    <div style="background: linear-gradient(45deg, #fff3e0, #ffcc02); padding: 20px; border-radius: 12px; margin-top: 20px; text-align: center;">
+        <h4 style="color: #e65100; margin: 0;">💡 Pro Tip: For best results, use high-resolution histopathology images with clear tissue structures</h4>
+    </div>
+</div>
+"""
+disclaimer = """
+"""
+
+# Create the enhanced interface
+with gr.Blocks(css=custom_css, theme=gr.themes.Soft(), title="BREAST AI PRO - Advanced Cancer Detection") as demo:
+
+    # Header Section
     with gr.Row():
+        with gr.Column():
+            gr.HTML(f"""
+                <div class="main-header">
+                    <h1 style="color: #2c3e50; margin-bottom: 15px; font-size: 2.5em;">
+                        {title}
+                    </h1>
+                    {description}
+                    {instructions}
+                    {disclaimer}
+                </div>
+            """)
+
+    # Main Interface
+    with gr.Row(equal_height=True):
+        # Left Column - Input Section
         with gr.Column(scale=1):
+            # Upload Section
             with gr.Group():
-                gr.HTML('<div class="analysis-section">')
-                gr.Markdown("### Upload histopathology image")
-                image_input = gr.Image(label="Histopathology Image", type="numpy", sources=["upload", "clipboard"])
+                gr.HTML('<div class="analysis-card">')
+                gr.Markdown("### 📤 **AI-Powered Image Analysis Center**")
+                gr.Markdown("*Upload your histopathology image for comprehensive AI analysis*")
+
+                image_input = gr.Image(
+                    label="🔬 Upload Histopathology Image | حمّل صورة | داگرتن  ",
+                    type="numpy",
+                    height=400,
+                    elem_classes=["image-container"]
+                )
+
+                gr.Markdown("""
+                <div style="background: #e3f2fd; padding: 15px; border-radius: 10px; margin: 10px 0;">
+                    <strong>📋 Supported Formats:</strong> JPG, JPEG, PNG, TIF<br>
+                    <strong>🎯 Optimal Quality:</strong> High-resolution images (>500x500 pixels)<br>
+                    <strong>🔬 Image Types:</strong> H&E stained tissue sections
+                </div>
+                """)
+
                 with gr.Row():
-                    analyze_btn = gr.Button("🔍 Analyze", variant="primary", elem_classes=["btn-primary"])
-                    clear_btn = gr.Button("🧹 Clear")
-                status_output = gr.Markdown("🟡 Status: Ready")
+                    submit_btn = gr.Button(
+                        "🔍 Analyze with AI | حلل |  شلوڤەکرن ",
+                        variant="primary",
+                        size="lg",
+                        scale=2,
+                        elem_classes=["analyze-button"]
+                    )
+                    clear_btn = gr.Button(
+                        "🧹 Clear ",
+                        variant="secondary",
+                        size="lg",
+                        scale=1,
+                        elem_classes=["clear-button"]
+                    )
+
+                # Status Display
+                status_output = gr.Markdown(
+                    "🟡 **Status**: System Ready - Upload an image to begin analysis",
+                    elem_classes=["status-display"]
+                )
+
                 gr.HTML('</div>')
 
+            # Example Gallery
+            if sample_images:
+                with gr.Group():
+                    gr.HTML('<div class="analysis-card">')
+                    gr.Markdown("### 🖼️ **Sample Histopathology Images**")
+                    gr.Markdown("*Click on any image below to load it for analysis*")
+
+                    gallery_items = [(img, f"Sample: {name}") for img, name in sample_images]
+
+                    example_gallery = gr.Gallery(
+                        value=gallery_items,
+                        label="Curated histopathology samples from medical database",
+                        columns=2,
+                        rows=3,
+                        height=350,
+                        object_fit="cover",
+                        elem_classes=["example-gallery"],
+                        show_share_button=False,
+                        allow_preview=True
+                    )
+                    gr.HTML('</div>')
+
+        # Right Column - Results Section
         with gr.Column(scale=2):
             with gr.Group():
-                gr.HTML('<div class="analysis-section">')
-                gr.Markdown("### Results")
-                results_output = gr.HTML(create_waiting_message())
-                gr.Markdown("### Visual Attention")
-                plot_output = gr.Plot(label="Grad-CAM Visualization")
+                gr.HTML('<div class="analysis-card">')
+                gr.Markdown("### 📊 **Comprehensive AI Diagnostic Report**")
+
+                # Diagnostic Report
+                diagnosis_output = gr.HTML("""
+                <div style='background: linear-gradient(135deg, #e3f2fd, #bbdefb); padding: 30px; border-radius: 20px; text-align: center; margin: 20px 0; border: 2px dashed #2196f3;'>
+                    <div style='font-size: 3em; margin-bottom: 15px;'>🔬</div>
+                    <h2 style='color: #1976d2; margin: 0; font-size: 1.8em;'>AI Diagnostic System Ready</h2>
+                    <p style='color: #424242; font-size: 1.2em; margin: 15px 0;'>
+                        Upload a histopathology image to receive comprehensive AI-powered analysis
+                    </p>
+                    <div style='background: rgba(255,255,255,0.8); padding: 15px; border-radius: 12px; margin-top: 20px;'>
+                        <strong>🎯 What You'll Get:</strong><br>
+                        • Binary classification (Benign/Malignant)<br>
+                        • Detailed subtype identification<br>
+                        • Confidence scoring system<br>
+                        • Visual attention heatmaps<br>
+                        • Clinical recommendations
+                    </div>
+                </div>
+                """)
+
+                gr.Markdown("### 🌡️ **Multi-Scale Attention Visualization**")
+                gr.Markdown("*AI attention heatmaps showing where the model focuses during analysis*")
+
+                plot_output = gr.Plot(
+                    label="Advanced Grad-CAM Visualization System",
+                    elem_classes=["plot-container"]
+                )
+
+                # Enhanced Legend
+                gr.HTML("""
+                <div style='background: linear-gradient(135deg, #f5f5f5, #e0e0e0); padding: 20px; border-radius: 15px; margin: 15px 0;'>
+                    <h3 style='color: #2c3e50; text-align: center; margin-bottom: 20px;'>🎯 Heatmap Interpretation Guide</h3>
+                    <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; text-align: center;'>
+                        <div style='background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);'>
+                            <div style='display: inline-block; width: 20px; height: 20px; background: #ff0000; border-radius: 50%; margin-bottom: 8px;'></div>
+                            <div><strong>Critical Areas</strong></div>
+                            <div style='color: #666; font-size: 0.9em;'>High malignancy indicators</div>
+                        </div>
+                        <div style='background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);'>
+                            <div style='display: inline-block; width: 20px; height: 20px; background: #ff6600; border-radius: 50%; margin-bottom: 8px;'></div>
+                            <div><strong>Moderate Risk</strong></div>
+                            <div style='color: #666; font-size: 0.9em;'>Suspicious patterns</div>
+                        </div>
+                        <div style='background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);'>
+                            <div style='display: inline-block; width: 20px; height: 20px; background: #ffcc00; border-radius: 50%; margin-bottom: 8px;'></div>
+                            <div><strong>Low Risk</strong></div>
+                            <div style='color: #666; font-size: 0.9em;'>Benign characteristics</div>
+                        </div>
+                        <div style='background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);'>
+                            <div style='display: inline-block; width: 20px; height: 20px; background: #00cc00; border-radius: 50%; margin-bottom: 8px;'></div>
+                            <div><strong>Normal Tissue</strong></div>
+                            <div style='color: #666; font-size: 0.9em;'>Healthy patterns</div>
+                        </div>
+                    </div>
+                    <div style='background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 10px; margin-top: 15px; text-align: center;'>
+                        <strong>💡 Note:</strong> Heatmaps show AI attention at multiple zoom levels (100%, 75%, 50%, 25%) for comprehensive analysis
+                    </div>
+                </div>
+                """)
+
                 gr.HTML('</div>')
 
+    # Technical Specifications Section (kept unchanged)
+    with gr.Row():
+        with gr.Column():
+            gr.HTML("""
+                <div style="background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 20px; margin-top: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+                    <h2 style="color: #2c3e50; text-align: center; margin-bottom: 30px; font-size: 2em;">🔬 Advanced AI Architecture & Performance</h2>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px;">
+                        <div style="background: linear-gradient(45deg, #667eea, #764ba2); color: white; padding: 25px; border-radius: 15px; text-align: center;">
+                            <h3 style="margin-top: 0; font-size: 1.4em;">🧠 Neural Network Architecture</h3>
+                            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px; margin: 15px 0;">
+                                <strong>Binary Classifier:</strong> Deep CNN with attention mechanisms<br>
+                                <strong>Subtype Models:</strong> Specialized networks for benign/malignant subtypes<br>
+                                <strong>Visualization:</strong> Grad-CAM with multi-scale analysis<br>
+                                <strong>Input Resolution:</strong> 128x128 pixels (optimized)
+                            </div>
+                        </div>
+                        
+                        <div style="background: linear-gradient(45deg, #4CAF50, #45a049); color: white; padding: 25px; border-radius: 15px; text-align: center;">
+                            <h3 style="margin-top: 0; font-size: 1.4em;">📈 Clinical Performance</h3>
+                            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px; margin: 15px 0;">
+                                <strong>Overall Accuracy:</strong> 98.2% on validation set<br>
+                                <strong>Sensitivity:</strong> 97.8% (malignant detection)<br>
+                                <strong>Specificity:</strong> 98.6% (benign identification)<br>
+                                <strong>Processing Time:</strong> <3 seconds per image
+                            </div>
+                        </div>
+                        
+                        <div style="background: linear-gradient(45deg, #FF9800, #F57C00); color: white; padding: 25px; border-radius: 15px; text-align: center;">
+                            <h3 style="margin-top: 0; font-size: 1.4em;">🛡️ Quality Assurance</h3>
+                            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px; margin: 15px 0;">
+                                <strong>Validation:</strong> Multi-institutional dataset<br>
+                                <strong>Reliability:</strong> Confidence scoring system<br>
+                                <strong>Transparency:</strong> Explainable AI with heatmaps<br>
+                                <strong>Standards:</strong> Medical-grade accuracy requirements
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: linear-gradient(45deg, #e74c3c, #c0392b); color: white; padding: 20px; border-radius: 15px; margin-top: 25px; text-align: center;">
+                        <h3 style="margin: 0; font-size: 1.3em;">🏥 Supported Cancer Subtypes</h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px;">
+                            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px;">
+                                <strong>Benign Types:</strong><br>
+                                • Adenosis<br>
+                                • Fibroadenoma<br>
+                                • Phyllodes Tumor<br>
+                                • Tubular Adenoma
+                            </div>
+                            <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 10px;">
+                                <strong>Malignant Types:</strong><br>
+                                • Ductal Carcinoma<br>
+                                • Lobular Carcinoma<br>
+                                • Mucinous Carcinoma<br>
+                                • Papillary Carcinoma
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            """)
+
+    # Footer
+    gr.HTML("""
+        <div style='background: rgba(255, 255, 255, 0.9); padding: 25px; border-radius: 15px; margin-top: 25px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.1);'>
+            <h3 style='color: #2c3e50; margin-bottom: 15px;'>🌟 BREAST AI PRO - Leading the Future of Medical AI</h3>
+            <div style='display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;'>
+                <div>
+                    <strong>🔬 Research Excellence</strong><br>
+                    <span style='color: #666;'>Cutting-edge deep learning research</span>
+                </div>
+                <div>
+                    <strong>🏥 Clinical Impact</strong><br>
+                    <span style='color: #666;'>Supporting healthcare professionals worldwide</span>
+                </div>
+                <div>
+                    <strong>🛡️ Medical Safety</strong><br>
+                    <span style='color: #666;'>Rigorous validation and testing</span>
+                </div>
+                <div>
+                    <strong>🌍 Global Access</strong><br>
+                    <span style='color: #666;'>Democratizing advanced diagnostics</span>
+                </div>
+            </div>
+            <div style='background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 20px;'>
+                <p style='margin: 0; color: #666; font-size: 0.9em;'>
+                    © 2025 BREAST AI Technologies | For Research and Professional Medical Use Only<br>
+                    Developed with ❤️ for advancing cancer detection and patient care
+                </p>
+            </div>
+        </div>
+    """)
+
+    # Event Handlers
+    def select_example(evt: gr.SelectData):
+        return sample_images[evt.index][0]
+
     def clear_interface():
-        return None, create_waiting_message(), None, "🟡 Status: Cleared"
+        return None, """
+        <div style='background: linear-gradient(135deg, #e3f2fd, #bbdefb); padding: 30px; border-radius: 20px; text-align: center; margin: 20px 0; border: 2px dashed #2196f3;'>
+            <div style='font-size: 3em; margin-bottom: 15px;'>🔬</div>
+            <h2 style='color: #1976d2; margin: 0; font-size: 1.8em;'>AI Diagnostic System Ready</h2>
+            <p style='color: #424242; font-size: 1.2em; margin: 15px 0;'>
+                Upload a histopathology image to receive comprehensive AI-powered analysis
+            </p>
+            <div style='background: rgba(255,255,255,0.8); padding: 15px; border-radius: 12px; margin-top: 20px;'>
+                <strong>🎯 What You'll Get:</strong><br>
+                • Binary classification (Benign/Malignant)<br>
+                • Detailed subtype identification<br>
+                • Confidence scoring system<br>
+                • Visual attention heatmaps<br>
+                • Clinical recommendations
+            </div>
+        </div>
+        """, None, "🟡 **Status**: Interface Cleared - Ready for new analysis"
 
-    analyze_btn.click(fn=analyze_image, inputs=image_input, outputs=[results_output, plot_output, status_output])
-    clear_btn.click(fn=clear_interface, outputs=[image_input, results_output, plot_output, status_output])
+    if sample_images:
+        example_gallery.select(select_example, outputs=image_input)
 
-# ------------------------------------------------------------------------------
-# Launch
-# ------------------------------------------------------------------------------
+    submit_btn.click(
+        fn=analyze_image,
+        inputs=image_input,
+        outputs=[diagnosis_output, plot_output, status_output]
+    )
+
+    clear_btn.click(
+        fn=clear_interface,
+        outputs=[image_input, diagnosis_output, plot_output, status_output]
+    )
+
+# Launch the application
 if __name__ == "__main__":
-    print("🚀 Starting application...")
-    demo.launch(share=True, show_error=True, server_name="0.0.0.0", server_port=7860)
+    demo.launch(
+        share=True
+        favicon_path=None,
+        ssl_verify=False
+    )
