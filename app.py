@@ -224,10 +224,8 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=7860,
         share=True,
-        show_error=True,
         max_threads=10,
         favicon_path=None,
         ssl_verify=False,
-        quiet=False,
         show_api=True
     )
