@@ -933,9 +933,7 @@ def main():
             favicon_path=None,
             ssl_verify=False,
             server_name="0.0.0.0",  # Allow external connections
-            server_port=7860,       # Default Gradio port
-            show_tips=True,
-            enable_queue=True
+            server_port=7860
         )
         
     except Exception as e:
