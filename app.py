@@ -31,7 +31,7 @@ DEBUG = False
 
 # Hugging Face Hub configuration
 REPO_ID = "jehadcheyi/bc_models"
-HF_TOKEN = os.getenv("jehad")  # Ensure this env var is set
+HF_TOKEN = os.getenv("jehad1")  # Ensure this env var is set
 
 # Model paths
 model_paths = {
