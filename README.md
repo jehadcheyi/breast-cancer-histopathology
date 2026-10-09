@@ -9,193 +9,90 @@ app_file: app.py
 pinned: true
 ---
 
+# Breast AI PRO
 
-# 🧠 BREAST AI PRO - Deep Learning System for Breast Cancer Detection
+**Live demo:** [www.histopathology.ai](https://huggingface.co/spaces/jehadcheyi/breast-cancer-histopathology3)
 
-## 🔍 Overview
+A two-stage deep learning system for classifying breast histopathology images, with Grad-CAM explanations and an interface in English, Arabic and Kurdish.
 
-**BREAST AI PRO** is a state-of-the-art deep learning system designed to detect and classify **breast cancer** subtypes from **histopathology images** using **Convolutional Neural Networks (CNNs)**. This powerful application leverages a multi-stage classification pipeline to first determine whether a sample is *benign* or *malignant*, and then further classifies the sample into a more detailed subtype using dedicated models. A built-in **Grad-CAM visualization** system enables users to see where the model is focusing its attention during predictions.
+I built this as part of my research on computational pathology. The goal is simple: given a histopathology image, tell the user whether the tissue looks benign or malignant, name the most likely subtype, and show which regions of the image drove that decision.
 
-This application is powered by **TensorFlow**, **Gradio**, and **Hugging Face Hub**, making it efficient, scalable, and user-friendly.
+> **Research use only.** This tool is not a medical device and must not be used for clinical diagnosis or treatment decisions. Any output should be reviewed by a qualified pathologist.
 
----
+## How it works
 
-## 🌟 Features
+The system runs three models in sequence, each trained for one job.
 
-- ✅ **Multi-Stage Classifier**: First performs binary classification, then detailed subtype classification.
-- 📊 **Subtype Prediction**:
-  - Benign: Adenosis, Fibroadenoma, Phyllodes Tumor, Tubular Adenoma
-  - Malignant: Ductal Carcinoma, Lobular Carcinoma, Mucinous Carcinoma, Papillary Carcinoma
-- 🎯 **High Accuracy**: Utilizes pretrained and optimized deep learning models with >98% classification accuracy.
-- 🔥 **Grad-CAM Visualization**: Displays attention heatmaps to interpret model decisions.
-- 🧪 **Sample Image Gallery**: Users can test the system with built-in sample images.
-- 🌐 **Multilingual UI**: Interface labels and guidance provided in **English**, **Arabic**, and **Kurdish**.
-- 📦 **Easy to Use**: Web-based application built with Gradio for ease of access and deployment.
-- 💻 **Lightweight and Efficient**: Supports `.jpg`, `.png`, `.jpeg`, `.tif` image formats.
+1. **Binary classification.** A CNN decides whether the image is benign or malignant.
+2. **Subtype classification.** Depending on the first result, the image is passed to one of two specialised models:
+   - Benign: adenosis, fibroadenoma, phyllodes tumor, tubular adenoma
+   - Malignant: ductal carcinoma, lobular carcinoma, mucinous carcinoma, papillary carcinoma
+3. **Grad-CAM.** Heatmaps are generated from the final convolutional layers and overlaid on the original image, at four zoom levels (100%, 75%, 50%, 25%), so the reader can check whether the model is attending to clinically meaningful structures.
 
----
+Reported accuracy is above 98% on [dataset and split: fill in]. Please treat this as a research result on that benchmark, not a guarantee of performance on images from other labs, scanners or staining protocols.
 
-## 🏗️ Project Architecture
+| Category  | Code | Subtype             |
+|-----------|------|---------------------|
+| Benign    | A    | Adenosis            |
+| Benign    | F    | Fibroadenoma        |
+| Benign    | PT   | Phyllodes tumor     |
+| Benign    | TA   | Tubular adenoma     |
+| Malignant | DC   | Ductal carcinoma    |
+| Malignant | LC   | Lobular carcinoma   |
+| Malignant | MC   | Mucinous carcinoma  |
+| Malignant | PC   | Papillary carcinoma |
 
-The BREAST AI system is composed of several components:
+## Features
 
-1. **Model Loading & Caching**
-   - Three Keras models are downloaded from Hugging Face Hub and loaded into memory:
-     - `binary.h5` for benign vs. malignant
-     - `benign.h5` for benign subtypes
-     - `malignant.h5` for malignant subtypes
+- Upload your own image (`.jpg`, `.jpeg`, `.png`, `.tif`) or pick one from the built-in `example/` gallery
+- Class probabilities for both the binary and subtype stages
+- Grad-CAM overlays at multiple zoom levels
+- Interface text in English, Arabic and Kurdish
+- Model weights pulled from the Hugging Face Hub and cached locally on first run
 
-2. **Prediction Pipeline**
-   - Input image is resized, normalized, and passed to the binary classifier.
-   - Based on the result, a corresponding subtype model is selected.
-   - Predictions are displayed along with probabilities.
+## Running it locally
 
-3. **Grad-CAM Attention**
-   - Visualizes which areas of the image the model used for prediction.
-   - Multiple zoom levels (100%, 75%, 50%, 25%) are displayed for better interpretability.
-
-4. **Interactive Frontend with Gradio**
-   - Upload images or select from examples.
-   - View diagnostic summary and Grad-CAM visualizations.
-   - Interactive design with stylized components for clear communication.
-
----
-
-## 🧠 How It Works
-
-### Step 1: Binary Classification
-- Determines whether the tissue is **benign** or **malignant** using a CNN-based model.
-
-### Step 2: Subtype Classification
-- If **benign**, it identifies:
-  - **Adenosis**, **Fibroadenoma**, **Phyllodes Tumor**, **Tubular Adenoma**
-- If **malignant**, it identifies:
-  - **Ductal Carcinoma**, **Lobular Carcinoma**, **Mucinous Carcinoma**, **Papillary Carcinoma**
-
-### Step 3: Grad-CAM Heatmap Generation
-- Grad-CAM is used to extract feature maps from the final convolutional layers.
-- Highlights where the model "looked" during its decision.
-- Multiple zoomed-in crops are processed for enhanced analysis.
-
----
-
-## 🧬 Example Subtypes
-
-| Category  | Code | Full Name              |
-|----------|------|------------------------|
-| Benign   | A    | Adenosis               |
-| Benign   | F    | Fibroadenoma           |
-| Benign   | PT   | Phyllodes Tumor        |
-| Benign   | TA   | Tubular Adenoma        |
-| Malignant| DC   | Ductal Carcinoma       |
-| Malignant| LC   | Lobular Carcinoma      |
-| Malignant| MC   | Mucinous Carcinoma     |
-| Malignant| PC   | Papillary Carcinoma    |
-
----
-
-## 🧪 Sample Image Gallery
-
-The app provides built-in example images from a folder named `example/`. Users can:
-- Upload custom pathology images for evaluation.
-- Click on sample images to run instant predictions.
-
----
-
-## 📦 Installation and Setup
-
-### ✅ Requirements
-
-- Python 3.7+
-- TensorFlow >= 2.4
-- Gradio
-- OpenCV
-- NumPy
-- Matplotlib
-- Pillow
-- Hugging Face Hub
-
-### 🔧 Install Dependencies
+Requirements: Python 3.7+ and TensorFlow 2.4 or later.
 
 ```bash
 pip install tensorflow gradio opencv-python matplotlib numpy pillow huggingface-hub
-🔐 Set Hugging Face Access Token
-bash
-Copy
-Edit
-export jehad="your_hf_token_here"
-Replace "your_hf_token_here" with your actual Hugging Face token.
+```
 
-🚀 Run the App
-bash
-Copy
-Edit
-python app.py
-or if using Jupyter/Colab:
+The model files (`binary.h5`, `benign.h5`, `malignant.h5`) are downloaded from the Hugging Face Hub, so you need an access token. The app reads it from an environment variable named `jehad`. Once it is set, start the app with `python app.py`. In Colab or Jupyter, call `demo.launch(share=True)` instead to get a public link.
 
-python
-Copy
-Edit
-demo.launch(share=True)
-The app will start in your browser and allow local or remote access (if share=True is used).
+## Project structure
 
-🔬 Grad-CAM Visualization
-Grad-CAM is a visualization technique that reveals which areas of the input image were important for the model’s decision. In BREAST AI PRO:
-
-Red areas: High model attention (suspicious/malignant regions)
-
-Green areas: Low model attention (normal tissue)
-
-Overlay: Heatmap blended with the original image
-
-Multi-level zoom: Helps pathologists analyze patterns in different scales
-
-🌍 Multi-Language Interface
-This application includes labels and guidance in:
-
-English
-
-Arabic
-
-Kurdish
-
-Making it accessible to a wide range of users in international medical and academic communities.
-
-📁 Folder Structure
-bash
-Copy
-Edit
+```
 .
-├── example/             # Sample histopathology images
-├── model_cache/         # Cached models from Hugging Face
-├── app.py               # Main application script
-├── README.md            # This file
-💬 Future Improvements
-📈 Real-time performance monitoring
+├── app.py          # Gradio app and inference pipeline
+├── example/        # Sample histopathology images
+├── model_cache/    # Models cached from the Hugging Face Hub
+└── README.md
+```
 
-🔍 Segmentation of lesion areas
+## Planned work
 
-🌐 Web deployment with Docker or FastAPI
+- Lesion segmentation
+- Docker / FastAPI deployment
+- Performance monitoring
+- Mobile access
+- Integration with electronic health records
 
-📱 Mobile App Integration
+## Limitations
 
-🧪 Integration with electronic health records (EHR)
+- Trained and evaluated on a single public benchmark; external validation is still needed.
+- Grad-CAM shows where the model looked, not why. It is an aid for inspection, not proof of correct reasoning.
+- Image quality, magnification and staining differences can reduce accuracy.
 
-❗ Disclaimer
-BREAST AI PRO is intended for research and educational purposes only. It should not be used for clinical diagnosis or treatment without the supervision of qualified medical professionals.
+## License
 
-📜 License
-This project is licensed under MIT License. Feel free to use and modify it for academic or research purposes.
+MIT. Use and modify freely for academic and research purposes.
 
-🙌 Acknowledgments
-Built using TensorFlow, Gradio, and Hugging Face Hub
+## Acknowledgments
 
-Sample histopathology images adapted from public datasets
+Built with TensorFlow, Gradio and the Hugging Face Hub. Sample images are adapted from public datasets. Thanks to the researchers and clinicians whose annotations made this work possible.
 
-Special thanks to researchers and medical experts for annotations and insights
+## Contact
 
-📬 Contact
-For collaboration, questions, or suggestions, feel free to reach out:
-
-Developer/Researcher: Jehad Cheyi
-Institution: Breast AI Technologies | 2025
+Jehad Cheyi, Duhok, Kurdistan Region of Iraq.
+For collaboration or questions, please open an issue on this repository or get in touch directly.
